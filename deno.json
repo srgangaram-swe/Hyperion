@@ -1,0 +1,15 @@
+{
+  "tasks": {
+    "dev": "deno run --allow-net --allow-env --allow-read server/main.ts",
+    "check": "deno check server/main.ts"
+  },
+  "fmt": {
+    "lineWidth": 120,
+    "indentWidth": 2
+  },
+  "lint": {
+    "rules": {
+      "tags": ["recommended"]
+    }
+  }
+}

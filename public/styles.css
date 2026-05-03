@@ -1,0 +1,675 @@
+:root {
+  color: #191b1f;
+  background: #f6f7f9;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(246, 247, 249, 0.98)),
+    radial-gradient(circle at 20% 0%, rgba(31, 138, 112, 0.12), transparent 34%),
+    radial-gradient(circle at 90% 10%, rgba(193, 68, 84, 0.1), transparent 28%);
+}
+
+button,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.appShell {
+  display: grid;
+  grid-template-columns: 292px minmax(0, 1fr) 320px;
+  gap: 18px;
+  min-height: 100vh;
+  padding: 18px;
+}
+
+.sidebar,
+.eventRail,
+.composer,
+.runCard,
+.emptyState {
+  border: 1px solid #dedfe5;
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 16px 44px rgba(25, 27, 31, 0.06);
+}
+
+.sidebar,
+.eventRail {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 36px);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.brandBlock {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 18px;
+  border-bottom: 1px solid #e7e8ed;
+}
+
+.brandMark {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 8px;
+  color: #ffffff;
+  background: #191b1f;
+}
+
+.icon {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
+h1,
+h2,
+h3,
+h4,
+p {
+  margin: 0;
+}
+
+h1 {
+  font-size: 1.05rem;
+  line-height: 1.1;
+}
+
+h2 {
+  max-width: 760px;
+  font-size: clamp(1.35rem, 2vw, 2.05rem);
+  line-height: 1.14;
+}
+
+h3 {
+  font-size: 1.1rem;
+  text-transform: capitalize;
+}
+
+h4 {
+  font-size: 1rem;
+}
+
+.brandBlock p,
+.eyebrow,
+.runCard p,
+small {
+  color: #666c78;
+}
+
+.eyebrow {
+  margin-bottom: 6px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.sidebarSection {
+  padding: 16px;
+  border-bottom: 1px solid #e7e8ed;
+}
+
+.sidebarSection.fill {
+  flex: 1;
+  min-height: 0;
+  border-bottom: 0;
+}
+
+.sectionTitle {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
+  color: #2e333d;
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.sectionTitle b {
+  margin-left: auto;
+  color: #1f8a70;
+}
+
+.statusList,
+.connectorList,
+.sessionList,
+.eventList {
+  display: grid;
+  gap: 10px;
+}
+
+.statusRow,
+.connectorRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.statusRow {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.statusRow strong,
+.connectorRow strong,
+.agentChoice strong {
+  display: block;
+  overflow: hidden;
+  color: #252932;
+  font-size: 0.88rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.statusRow small,
+.connectorRow small,
+.agentChoice small {
+  display: block;
+  overflow: hidden;
+  font-size: 0.75rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 99px;
+  background: #c14454;
+}
+
+.dot.ready {
+  background: #1f8a70;
+}
+
+.dot.mock {
+  background: #d19a2e;
+}
+
+.connectorRow {
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid #ececf1;
+  border-radius: 8px;
+  background: #fbfbfd;
+}
+
+.pill,
+.statusBadge {
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: 5px;
+  align-items: center;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: capitalize;
+}
+
+.pill {
+  padding: 4px 7px;
+  background: #eef3f1;
+  color: #1f6d59;
+}
+
+.pill.needs_env {
+  background: #fff1e7;
+  color: #9a4f21;
+}
+
+.pill.mock {
+  background: #f2ecfb;
+  color: #68418f;
+}
+
+.sessionList,
+.eventList {
+  max-height: 42vh;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.sessionButton {
+  width: 100%;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #ececf1;
+  border-radius: 8px;
+  background: #fbfbfd;
+  color: #252932;
+  text-align: left;
+}
+
+.sessionButton.active {
+  border-color: #1f8a70;
+  box-shadow: inset 3px 0 0 #1f8a70;
+}
+
+.sessionButton span,
+.sessionButton small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+}
+
+.topbar,
+.runHeader {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.topbarStats {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.metric {
+  min-width: 86px;
+  padding: 10px 12px;
+  border: 1px solid #dedfe5;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.metric small,
+.metric strong {
+  display: block;
+}
+
+.metric strong {
+  margin-top: 3px;
+  font-size: 1.12rem;
+}
+
+.composer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 330px;
+  gap: 16px;
+  padding: 16px;
+  border-radius: 8px;
+}
+
+.promptColumn {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+}
+
+label,
+.pickerHeader {
+  color: #3a404b;
+  font-size: 0.82rem;
+  font-weight: 850;
+}
+
+textarea {
+  width: 100%;
+  min-height: 132px;
+  resize: vertical;
+  border: 1px solid #d8dae2;
+  border-radius: 8px;
+  padding: 12px;
+  background: #ffffff;
+  color: #191b1f;
+  line-height: 1.5;
+}
+
+textarea:focus {
+  border-color: #1f8a70;
+  outline: 3px solid rgba(31, 138, 112, 0.16);
+}
+
+.promptActions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.starterRow {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ghostButton,
+.secondaryButton,
+.dangerButton,
+.primaryButton,
+.iconButton {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  font-weight: 850;
+}
+
+.ghostButton {
+  max-width: 230px;
+  overflow: hidden;
+  padding: 8px 10px;
+  border: 1px solid #e4e5eb;
+  background: #fbfbfd;
+  color: #505766;
+  font-size: 0.78rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.primaryButton,
+.secondaryButton,
+.dangerButton {
+  min-height: 40px;
+  padding: 0 14px;
+  border: 0;
+}
+
+.primaryButton {
+  background: #191b1f;
+  color: #ffffff;
+}
+
+.secondaryButton {
+  border: 1px solid #dedfe5;
+  background: #ffffff;
+  color: #252932;
+}
+
+.dangerButton {
+  background: #c14454;
+  color: #ffffff;
+}
+
+.iconButton {
+  width: 32px;
+  height: 32px;
+  border: 1px solid #dedfe5;
+  background: #ffffff;
+  color: #252932;
+}
+
+.agentPicker {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.pickerHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.agentChoice {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #e5e6eb;
+  border-radius: 8px;
+  background: #fbfbfd;
+  color: #252932;
+  text-align: left;
+}
+
+.agentChoice.selected {
+  border-color: #1f8a70;
+  background: #f3faf7;
+}
+
+.agentAccent {
+  width: 12px;
+  height: 32px;
+  border-radius: 999px;
+}
+
+.runGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.runCard {
+  display: flex;
+  min-width: 0;
+  min-height: 320px;
+  flex-direction: column;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.runCard header {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 13px 14px;
+  border-bottom: 1px solid #e7e8ed;
+  box-shadow: inset 4px 0 0 var(--accent);
+}
+
+.runCard header > div {
+  min-width: 0;
+}
+
+.runCard h4,
+.runCard p {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.runCard pre {
+  flex: 1;
+  min-height: 230px;
+  margin: 0;
+  overflow: auto;
+  padding: 14px;
+  color: #20242c;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.84rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.statusBadge {
+  padding: 5px 8px;
+  color: #555c69;
+  background: #eef0f4;
+}
+
+.statusBadge.running {
+  color: #8a5818;
+  background: #fff4df;
+}
+
+.statusBadge.completed {
+  color: #1f6d59;
+  background: #eaf7f2;
+}
+
+.statusBadge.failed {
+  color: #9f2e3d;
+  background: #fdecef;
+}
+
+.statusBadge.cancelled {
+  color: #68418f;
+  background: #f1eafa;
+}
+
+.errorLine {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 14px;
+  color: #9f2e3d;
+  border-top: 1px solid #f3ccd2;
+  background: #fff5f6;
+  font-size: 0.84rem;
+}
+
+.eventRail {
+  padding: 16px;
+}
+
+.eventList {
+  max-height: calc(100vh - 94px);
+}
+
+.eventItem {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border-left: 3px solid #8c93a3;
+  border-radius: 6px;
+  background: #fbfbfd;
+}
+
+.eventItem.success {
+  border-color: #1f8a70;
+}
+
+.eventItem.warning {
+  border-color: #d19a2e;
+}
+
+.eventItem.error {
+  border-color: #c14454;
+}
+
+.eventItem span {
+  overflow-wrap: anywhere;
+  color: #2c313a;
+  font-size: 0.84rem;
+  line-height: 1.35;
+}
+
+.emptyState {
+  display: grid;
+  min-height: 280px;
+  grid-column: 1 / -1;
+  place-items: center;
+  border-radius: 8px;
+  color: #666c78;
+  font-weight: 850;
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 1180px) {
+  .appShell {
+    grid-template-columns: 260px minmax(0, 1fr);
+  }
+
+  .eventRail {
+    grid-column: 1 / -1;
+    min-height: 260px;
+  }
+
+  .eventList {
+    max-height: 220px;
+  }
+}
+
+@media (max-width: 860px) {
+  .appShell,
+  .composer,
+  .runGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar,
+  .eventRail {
+    min-height: auto;
+  }
+
+  .topbar,
+  .runHeader,
+  .promptActions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .topbarStats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 520px) {
+  .appShell {
+    padding: 10px;
+  }
+
+  .topbarStats {
+    grid-template-columns: 1fr;
+  }
+
+  .starterRow,
+  .primaryButton,
+  .secondaryButton,
+  .dangerButton {
+    width: 100%;
+  }
+
+  .ghostButton {
+    max-width: 100%;
+  }
+}
