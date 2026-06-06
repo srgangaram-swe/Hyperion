@@ -81,7 +81,7 @@ const state = {
   selectedTmuxSession: null,
   tmuxOutput: "",
   tmuxCommand: "",
-  tmuxPolling: false,
+  tmuxStreaming: false,   // true when WebSocket stream is active
 
   // files / context
   fileContexts: [],
@@ -96,6 +96,7 @@ const state = {
 };
 
 let tmuxPollTimer = null;
+let tmuxStreamSocket = null;
 
 // ── Bootstrap ────────────────────────────────────────────────────────────────
 
@@ -184,6 +185,7 @@ function handleAction(action, value, el, e) {
     case "switch-tool":
       state.activeTool = value;
       if (value === "tmux") loadTmuxSessions();
+      else stopTmuxStream();
       render();
       break;
 
@@ -358,10 +360,52 @@ async function loadTmuxSessions() {
 function selectTmuxSession(name) {
   state.selectedTmuxSession = name;
   state.tmuxOutput = "";
-  stopTmuxPoll();
-  fetchTmuxOutput(name);
-  startTmuxPoll(name);
+  stopTmuxStream();
+  startTmuxStream(name);
   render();
+}
+
+function startTmuxStream(name) {
+  stopTmuxStream();
+  const proto = location.protocol === "https:" ? "wss:" : "ws:";
+  const ws = new WebSocket(`${proto}//${location.host}/api/tmux/ws/${encodeURIComponent(name)}`);
+  tmuxStreamSocket = ws;
+
+  ws.addEventListener("open", () => {
+    state.tmuxStreaming = true;
+    render();
+  });
+
+  ws.addEventListener("message", (event) => {
+    try {
+      const msg = JSON.parse(event.data);
+      if (msg.type === "output" && msg.payload?.data !== undefined) {
+        state.tmuxOutput = msg.payload.data;
+        render();
+        const pane = document.querySelector(".tmuxOutput");
+        if (pane) pane.scrollTop = pane.scrollHeight;
+      }
+    } catch { /* ignore malformed frames */ }
+  });
+
+  ws.addEventListener("close", () => {
+    tmuxStreamSocket = null;
+    state.tmuxStreaming = false;
+    // Fall back to REST polling if the WebSocket closes unexpectedly
+    if (state.selectedTmuxSession === name) {
+      startTmuxPoll(name);
+    }
+  });
+
+  ws.addEventListener("error", () => {
+    ws.close();
+  });
+}
+
+function stopTmuxStream() {
+  if (tmuxStreamSocket) { tmuxStreamSocket.close(); tmuxStreamSocket = null; }
+  state.tmuxStreaming = false;
+  stopTmuxPoll();
 }
 
 async function fetchTmuxOutput(name) {
@@ -369,7 +413,6 @@ async function fetchTmuxOutput(name) {
   const data = await res.json();
   state.tmuxOutput = data.output ?? "";
   render();
-  // Auto-scroll pane output to bottom
   const pane = document.querySelector(".tmuxOutput");
   if (pane) pane.scrollTop = pane.scrollHeight;
 }
@@ -398,7 +441,7 @@ async function killTmuxSession(name) {
   if (state.selectedTmuxSession === name) {
     state.selectedTmuxSession = null;
     state.tmuxOutput = "";
-    stopTmuxPoll();
+    stopTmuxStream();
   }
   await fetch(`/api/tmux/sessions/${encodeURIComponent(name)}`, { method: "DELETE" });
   await loadTmuxSessions();
@@ -418,7 +461,9 @@ async function sendTmuxCommand() {
     body: JSON.stringify({ keys: cmd })
   });
 
-  setTimeout(() => fetchTmuxOutput(session), 400);
+  // The WebSocket stream will pick up new output automatically.
+  // If streaming isn't active (fallback polling), force an immediate fetch.
+  if (!state.tmuxStreaming) setTimeout(() => fetchTmuxOutput(session), 400);
 }
 
 async function suggestTmuxCommand() {
@@ -846,6 +891,12 @@ function renderTmuxPanel() {
 
       <div class="tmuxMain">
         ${selected ? `
+          <div class="tmuxOutputHeader">
+            <span class="tmuxSessionLabel">${esc(selected)}</span>
+            <span class="tmuxStreamBadge ${state.tmuxStreaming ? "live" : "polling"}">
+              ${state.tmuxStreaming ? "● LIVE" : "⟳ polling"}
+            </span>
+          </div>
           <div class="tmuxOutput" id="tmux-output">${esc(state.tmuxOutput)}<span class="tmuxCursor"></span></div>
           <div class="tmuxInputBar">
             <span class="tmuxPromptPrefix">$</span>

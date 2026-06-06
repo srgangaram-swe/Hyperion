@@ -115,3 +115,23 @@ export interface EmailDraftRequest {
   subject?: string;
   tone?: "professional" | "casual" | "concise";
 }
+
+export interface IncomingEmail {
+  messageId?: string;
+  subject: string;
+  from: string;
+  date: string;
+  body: string;
+  autoTriage?: boolean;
+}
+
+// ── Vector memory ─────────────────────────────────────────────────────────────
+
+export interface VectorSearchHit {
+  id: string;
+  text: string;
+  category: string;
+  tags: string[];
+  agent_id?: string;
+  score: number;
+}

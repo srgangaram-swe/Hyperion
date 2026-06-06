@@ -25,3 +25,14 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+
+# Obsidian notes (personal)
+*.md.md
+Hyperion - Project Notes.md
+
+# Python services — runtime data
+services/*/data/
+services/*/.venv/
+services/*/__pycache__/
+services/*/*.pyc
+services/*/.env

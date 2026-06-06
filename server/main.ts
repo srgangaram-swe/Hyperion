@@ -30,14 +30,19 @@ import type {
 await loadEnvFile();
 
 const port = Number(Deno.env.get("PORT") || 8787);
+const vectorUrl = Deno.env.get("VECTOR_MEMORY_URL")?.replace(/\/$/, "") || "";
 const agents = getAgents();
 const clients = new Set<WebSocket>();
 const sessions = new Map<string, AgentSession>();
 const events: SessionEvent[] = [];
 const runControllers = new Map<string, AbortController>();
 
+// tmux WebSocket clients: sessionName → Set of open sockets
+const tmuxClients = new Map<string, Set<WebSocket>>();
+
 Deno.serve({ hostname: "127.0.0.1", port }, handleRequest);
 console.log(`\x1b[31m[HYPERION]\x1b[0m Server running at http://127.0.0.1:${port}`);
+if (vectorUrl) console.log(`\x1b[31m[HYPERION]\x1b[0m Vector memory → ${vectorUrl}`);
 
 async function handleRequest(request: Request): Promise<Response> {
   const url = new URL(request.url);
@@ -58,6 +63,41 @@ async function handleRequest(request: Request): Promise<Response> {
 
     socket.addEventListener("close", () => {
       clients.delete(socket);
+    });
+
+    return response;
+  }
+
+  // ── tmux live-stream WebSocket (/api/tmux/ws/:sessionName) ─────────────────
+  const tmuxWsMatch = url.pathname.match(/^\/api\/tmux\/ws\/([^/]+)$/);
+  if (tmuxWsMatch) {
+    const sessionName = decodeURIComponent(tmuxWsMatch[1]);
+    const { socket, response } = Deno.upgradeWebSocket(request);
+
+    socket.addEventListener("open", async () => {
+      if (!tmuxClients.has(sessionName)) tmuxClients.set(sessionName, new Set());
+      tmuxClients.get(sessionName)!.add(socket);
+
+      // Send full initial snapshot
+      const initial = await capturePane(sessionName);
+      send(socket, "output", { data: initial.output ?? "", full: true });
+
+      // Poll at 500 ms; push only when output changes
+      let lastOutput = initial.output ?? "";
+      const timer = setInterval(async () => {
+        if (socket.readyState !== WebSocket.OPEN) { clearInterval(timer); return; }
+        const result = await capturePane(sessionName);
+        const current = result.output ?? "";
+        if (current !== lastOutput) {
+          lastOutput = current;
+          send(socket, "output", { data: current, full: true });
+        }
+      }, 500);
+
+      socket.addEventListener("close", () => {
+        clearInterval(timer);
+        tmuxClients.get(sessionName)?.delete(socket);
+      });
     });
 
     return response;
@@ -259,6 +299,48 @@ async function handleApi(request: Request, url: URL): Promise<Response> {
     });
   }
 
+  // ── Email webhook (from Python email poller) ──────────────────────────────
+
+  if (url.pathname === "/api/webhooks/email" && request.method === "POST") {
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body !== "object") return json({ error: "Expected JSON" }, 400);
+
+    const { subject = "(no subject)", from = "", date = "", body: emailBody = "", autoTriage = false } = body as Record<string, unknown>;
+    const preview = String(emailBody).slice(0, 120).replace(/\s+/g, " ");
+
+    addEvent({
+      sessionId: "system",
+      type: "email",
+      level: "info",
+      message: `📬 ${String(from)} — ${String(subject)} ${preview ? `· ${preview}…` : ""}`,
+    });
+
+    // Optional: auto-start a triage session with Claude
+    if (autoTriage && providerConfigured("anthropic")) {
+      const triageAgent = agents.find((a) => a.provider === "anthropic");
+      if (triageAgent) {
+        const prompt = [
+          `New email received:`,
+          `From: ${String(from)}`,
+          `Subject: ${String(subject)}`,
+          `Date: ${String(date)}`,
+          `\nBody:\n${String(emailBody).slice(0, 3000)}`,
+          `\nTasks:`,
+          `1. Classify urgency (high / medium / low) with one sentence reason.`,
+          `2. Draft a concise reply (3–5 sentences). Be direct.`,
+        ].join("\n");
+
+        const session = createSession({ prompt, agentIds: [triageAgent.id], title: `Triage: ${String(subject).slice(0, 50)}` });
+        sessions.set(session.id, session);
+        addEvent({ sessionId: session.id, type: "session", level: "info", message: `Auto-triage started for: ${String(subject)}` });
+        emitSessions();
+        runSession(session.id);
+      }
+    }
+
+    return json({ ok: true });
+  }
+
   // ── Memory API ──────────────────────────────────────────────────────────────
 
   if (url.pathname === "/api/memory" && request.method === "GET") {
@@ -267,10 +349,26 @@ async function handleApi(request: Request, url: URL): Promise<Response> {
     const agentId  = url.searchParams.get("agentId") ?? undefined;
     const limit    = Number(url.searchParams.get("limit") || 50);
 
+    if (q && vectorUrl) {
+      // Proxy semantic search to the Python vector memory service
+      try {
+        const params = new URLSearchParams({ q, limit: String(limit) });
+        if (category) params.set("category", category);
+        const res = await fetch(`${vectorUrl}/search?${params}`);
+        if (res.ok) {
+          const data = await res.json();
+          // Map vector results back to MemoryEntry shape (score added as extra field)
+          return json({ entries: data.results, source: "vector" });
+        }
+      } catch {
+        // fall through to keyword search
+      }
+    }
+
     const entries = q
       ? await searchMemory(q, { limit })
       : await listMemories({ category, agentId, limit });
-    return json({ entries });
+    return json({ entries, source: "keyword" });
   }
 
   if (url.pathname === "/api/memory" && request.method === "POST") {
@@ -278,6 +376,16 @@ async function handleApi(request: Request, url: URL): Promise<Response> {
     const { category = "fact", text = "", tags = [], agentId, sessionId } = body;
     if (!text.trim()) return json({ error: "text is required" }, 400);
     const entry = await addMemory({ category, text, tags, agentId, sessionId });
+
+    // Mirror to vector service (non-blocking — fire and forget)
+    if (vectorUrl) {
+      fetch(`${vectorUrl}/embed`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id: entry.id, category: entry.category, text: entry.text, tags: entry.tags, agent_id: entry.agentId ?? null }),
+      }).catch(() => {});
+    }
+
     return json({ entry }, 201);
   }
 
@@ -291,6 +399,12 @@ async function handleApi(request: Request, url: URL): Promise<Response> {
 
   if (memoryMatch && request.method === "DELETE") {
     const ok = await deleteMemory(memoryMatch[1]);
+
+    // Mirror deletion to vector service (non-blocking)
+    if (ok && vectorUrl) {
+      fetch(`${vectorUrl}/embed/${memoryMatch[1]}`, { method: "DELETE" }).catch(() => {});
+    }
+
     return ok ? json({ ok: true }) : json({ error: "Not found" }, 404);
   }
 

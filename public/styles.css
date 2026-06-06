@@ -933,6 +933,43 @@ textarea::placeholder { color: var(--text-muted); }
   overflow: hidden;
 }
 
+.tmuxOutputHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 12px;
+  background: #0a0a0a;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.tmuxSessionLabel {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.tmuxStreamBadge {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+
+.tmuxStreamBadge.live {
+  color: #22cc55;
+  background: rgba(34, 204, 85, 0.12);
+  border: 1px solid rgba(34, 204, 85, 0.3);
+}
+
+.tmuxStreamBadge.polling {
+  color: var(--text-muted);
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+}
+
 .tmuxOutput {
   flex: 1;
   overflow: auto;
