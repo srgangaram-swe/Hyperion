@@ -6,6 +6,8 @@ export type SessionStatus = "queued" | "running" | "completed" | "failed" | "can
 
 export type EventLevel = "info" | "success" | "warning" | "error";
 
+export type ToolId = "chat" | "tmux" | "email" | "files";
+
 export interface AgentConfig {
   id: string;
   name: string;
@@ -55,7 +57,7 @@ export interface SessionEvent {
   runId?: string;
   agentId?: string;
   level: EventLevel;
-  type: "session" | "run" | "delta" | "connector";
+  type: "session" | "run" | "delta" | "connector" | "tmux" | "email";
   message: string;
   delta?: string;
   createdAt: string;
@@ -80,4 +82,36 @@ export interface RunDeltaPayload {
   sessionId: string;
   runId: string;
   delta: string;
+}
+
+// ── tmux ────────────────────────────────────────────────────────────────────
+
+export interface TmuxSession {
+  name: string;
+  windows: number;
+  attached: boolean;
+}
+
+export interface TmuxOutput {
+  session: string;
+  output: string;
+  capturedAt: string;
+}
+
+// ── File context ─────────────────────────────────────────────────────────────
+
+export interface FileContext {
+  id: string;
+  name: string;
+  content: string;
+  size: number;
+}
+
+// ── Email ────────────────────────────────────────────────────────────────────
+
+export interface EmailDraftRequest {
+  context: string;
+  to?: string;
+  subject?: string;
+  tone?: "professional" | "casual" | "concise";
 }

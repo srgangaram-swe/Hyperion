@@ -1,8 +1,27 @@
-node_modules/
-dist/
-dist-server/
+# Secrets
 .env
-.DS_Store
+
+# Runtime data
+data/
+*.db
+*.sqlite
+
+# Logs
 *.log
 .agenticai-dev.pid
 .agenticai-dev.log
+
+# Build artifacts
+node_modules/
+dist/
+dist-server/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo

@@ -1,0 +1,33 @@
+name: Feature request
+description: Suggest something new
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or motivation
+      description: What are you trying to do that Hyperion doesn't support?
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: How would you like it to work?
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - UI / theme
+        - Agent / provider
+        - tmux integration
+        - Email
+        - Memory
+        - Research
+        - API
+        - Other
+    validations:
+      required: true
