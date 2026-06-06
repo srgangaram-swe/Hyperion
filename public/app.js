@@ -30,12 +30,10 @@
       const char = CHARS[Math.floor(Math.random() * CHARS.length)];
       const y = drops[i] * FONT_SIZE;
 
-      // Lead character: brighter red
       if (drops[i] > 0) {
         ctx.fillStyle = "rgba(255, 60, 60, 0.9)";
         ctx.fillText(char, i * FONT_SIZE, y);
       }
-      // Trail
       ctx.fillStyle = "rgba(160, 10, 10, 0.35)";
       ctx.fillText(char, i * FONT_SIZE, y + FONT_SIZE);
 
@@ -73,7 +71,7 @@ const state = {
   prompt: STARTER_PROMPTS[0],
   submitting: false,
 
-  // tool panel ("chat" | "tmux" | "email" | "files")
+  // tool panel
   activeTool: "chat",
 
   // tmux
@@ -81,7 +79,7 @@ const state = {
   selectedTmuxSession: null,
   tmuxOutput: "",
   tmuxCommand: "",
-  tmuxStreaming: false,   // true when WebSocket stream is active
+  tmuxStreaming: false,
 
   // files / context
   fileContexts: [],
@@ -93,10 +91,103 @@ const state = {
   emailDraft: "",
   emailDrafting: false,
   emailTone: "professional",
+
+  // agents panel
+  agentFormOpen: false,
+  agentFormId: null,
+  agentForm: { name: "", provider: "openai", model: "gpt-5.5", description: "", accent: "#cc1111", systemPrompt: "", tools: [] },
+
+  // code panel
+  codeFile: null,
+  codeContent: "",
+  codeExpanded: {},
+  codeDirContents: {},
+  codeSaved: true,
 };
 
 let tmuxPollTimer = null;
 let tmuxStreamSocket = null;
+
+// ── Monaco setup ─────────────────────────────────────────────────────────────
+
+const monacoContainer = document.createElement("div");
+monacoContainer.style.cssText = "width:100%;height:100%;";
+let monacoEditor = null;
+let monacoReady = false;
+let monacoInitStarted = false;
+
+function initMonaco() {
+  if (monacoInitStarted) return;
+  monacoInitStarted = true;
+  window.require.config({ paths: { vs: "https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs" } });
+  window.require(["vs/editor/editor.main"], () => {
+    window.monaco.editor.defineTheme("hyperion", {
+      base: "vs-dark",
+      inherit: true,
+      rules: [
+        { token: "comment", foreground: "555555", fontStyle: "italic" },
+        { token: "keyword", foreground: "cc2222", fontWeight: "bold" },
+        { token: "string", foreground: "bb4444" },
+        { token: "number", foreground: "ff6666" },
+      ],
+      colors: {
+        "editor.background": "#080808",
+        "editor.foreground": "#e8e8e8",
+        "editorLineNumber.foreground": "#333333",
+        "editorCursor.foreground": "#cc1111",
+        "editor.selectionBackground": "#cc111133",
+        "editor.lineHighlightBackground": "#111111",
+        "scrollbarSlider.background": "#330808",
+        "scrollbarSlider.hoverBackground": "#550a0a",
+        "editorWidget.background": "#0c0c0c",
+        "input.background": "#090909",
+      }
+    });
+    monacoReady = true;
+    if (state.activeTool === "code") mountMonaco();
+  });
+}
+
+function mountMonaco() {
+  const slot = document.getElementById("monaco-slot");
+  if (!slot) return;
+
+  if (!monacoReady) {
+    initMonaco();
+    slot.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-muted);font-size:0.76rem;letter-spacing:0.1em;text-transform:uppercase;">Loading editor…</div>`;
+    return;
+  }
+
+  slot.innerHTML = "";
+  slot.appendChild(monacoContainer);
+
+  if (!monacoEditor) {
+    monacoEditor = window.monaco.editor.create(monacoContainer, {
+      value: state.codeContent || "// Select a file from the tree to open it here",
+      language: inferLanguage(state.codeFile),
+      theme: "hyperion",
+      fontSize: 13,
+      fontFamily: "'JetBrains Mono', 'Cascadia Code', 'Fira Code', monospace",
+      minimap: { enabled: false },
+      scrollBeyondLastLine: false,
+      lineNumbers: "on",
+      wordWrap: "off",
+      renderWhitespace: "none",
+      padding: { top: 12, bottom: 12 },
+      smoothScrolling: true,
+    });
+    monacoEditor.onDidChangeModelContent(() => {
+      state.codeContent = monacoEditor.getValue();
+      if (state.codeFile && state.codeSaved) {
+        state.codeSaved = false;
+        const saveBtn = document.getElementById("code-save-btn");
+        if (saveBtn) saveBtn.innerHTML = `${icon("circle")} Save`;
+      }
+    });
+  } else {
+    monacoEditor.layout();
+  }
+}
 
 // ── Bootstrap ────────────────────────────────────────────────────────────────
 
@@ -105,6 +196,9 @@ const app = document.querySelector("#app");
 await loadInitialData();
 connectSocket();
 render();
+
+// Pre-load Monaco in background after boot so it's ready when user opens CODE tab
+setTimeout(initMonaco, 1500);
 
 // ── Event delegation ─────────────────────────────────────────────────────────
 
@@ -116,18 +210,46 @@ app.addEventListener("click", (e) => {
 
 app.addEventListener("input", (e) => {
   const id = e.target.id;
-  if (id === "prompt")        { state.prompt = e.target.value; return; }
-  if (id === "tmux-command")  { state.tmuxCommand = e.target.value; return; }
-  if (id === "email-to")      { state.emailTo = e.target.value; return; }
-  if (id === "email-subject") { state.emailSubject = e.target.value; return; }
-  if (id === "email-context") { state.emailContext = e.target.value; return; }
-  if (id === "email-draft")   { state.emailDraft = e.target.value; return; }
+  if (id === "prompt")              { state.prompt = e.target.value; return; }
+  if (id === "tmux-command")        { state.tmuxCommand = e.target.value; return; }
+  if (id === "email-to")            { state.emailTo = e.target.value; return; }
+  if (id === "email-subject")       { state.emailSubject = e.target.value; return; }
+  if (id === "email-context")       { state.emailContext = e.target.value; return; }
+  if (id === "email-draft")         { state.emailDraft = e.target.value; return; }
+  if (id === "agent-name")          { state.agentForm.name = e.target.value; return; }
+  if (id === "agent-model")         { state.agentForm.model = e.target.value; return; }
+  if (id === "agent-description")   { state.agentForm.description = e.target.value; return; }
+  if (id === "agent-system-prompt") { state.agentForm.systemPrompt = e.target.value; return; }
+  if (id === "agent-accent") {
+    state.agentForm.accent = e.target.value;
+    const t = document.getElementById("agent-accent-text");
+    if (t) t.value = e.target.value;
+    return;
+  }
+  if (id === "agent-accent-text") {
+    state.agentForm.accent = e.target.value;
+    const c = document.getElementById("agent-accent");
+    if (c && /^#[0-9a-fA-F]{6}$/.test(e.target.value)) c.value = e.target.value;
+    return;
+  }
+});
+
+app.addEventListener("change", (e) => {
+  if (e.target.id === "agent-provider") {
+    state.agentForm.provider = e.target.value;
+    state.agentForm.model = defaultModel(e.target.value);
+    render();
+  }
 });
 
 app.addEventListener("keydown", (e) => {
   if (e.target.id === "tmux-command" && e.key === "Enter" && !e.shiftKey) {
     e.preventDefault();
     sendTmuxCommand();
+  }
+  if (e.target.id === "prompt" && e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+    e.preventDefault();
+    createSession();
   }
 });
 
@@ -186,6 +308,10 @@ function handleAction(action, value, el, e) {
       state.activeTool = value;
       if (value === "tmux") loadTmuxSessions();
       else stopTmuxStream();
+      if (value === "code") {
+        if (!state.codeDirContents["."]) loadFsDir(".");
+        if (!monacoInitStarted) initMonaco();
+      }
       render();
       break;
 
@@ -212,7 +338,7 @@ function handleAction(action, value, el, e) {
       render();
       break;
 
-    // agents
+    // agents (selector)
     case "toggle-agent":
       state.selectedAgentIds = toggle(state.selectedAgentIds, value);
       render();
@@ -279,6 +405,75 @@ function handleAction(action, value, el, e) {
     case "copy-draft":
       navigator.clipboard.writeText(state.emailDraft).catch(() => {});
       break;
+
+    // ── Agents panel ───────────────────────────────────────────────────────
+
+    case "open-agent-form":
+      state.agentFormOpen = true;
+      state.agentFormId = null;
+      state.agentForm = { name: "", provider: "openai", model: "gpt-5.5", description: "", accent: "#cc1111", systemPrompt: "", tools: [] };
+      render();
+      break;
+
+    case "edit-agent": {
+      const ag = state.agents.find((a) => a.id === value);
+      if (ag && ag.id.startsWith("custom-")) {
+        state.agentFormOpen = true;
+        state.agentFormId = value;
+        state.agentForm = {
+          name: ag.name, provider: ag.provider, model: ag.model,
+          description: ag.description || "", accent: ag.accent || "#cc1111",
+          systemPrompt: ag.systemPrompt || "", tools: ag.tools || [],
+        };
+        render();
+      }
+      break;
+    }
+
+    case "delete-agent": {
+      const ag = state.agents.find((a) => a.id === value);
+      if (ag && window.confirm(`Delete agent "${ag.name}"?`)) {
+        deleteAgent(value);
+      }
+      break;
+    }
+
+    case "cancel-agent-form":
+      state.agentFormOpen = false;
+      state.agentFormId = null;
+      render();
+      break;
+
+    case "save-agent":
+      saveAgent();
+      break;
+
+    // ── Code panel ─────────────────────────────────────────────────────────
+
+    case "load-fs-dir":
+      loadFsDir(value || ".");
+      break;
+
+    case "toggle-fs-dir":
+      state.codeExpanded[value] = !state.codeExpanded[value];
+      if (state.codeExpanded[value] && !state.codeDirContents[value]) {
+        loadFsDir(value);
+      } else {
+        render();
+      }
+      break;
+
+    case "open-fs-file":
+      openFsFile(value);
+      break;
+
+    case "save-fs-file":
+      saveFsFile();
+      break;
+
+    case "code-to-chat":
+      codeToChat();
+      break;
   }
 }
 
@@ -315,7 +510,6 @@ async function createSession() {
   state.submitting = true;
   render();
 
-  // Prepend file context to prompt
   let fullPrompt = state.prompt;
   if (state.fileContexts.length > 0) {
     const ctx = state.fileContexts
@@ -371,10 +565,7 @@ function startTmuxStream(name) {
   const ws = new WebSocket(`${proto}//${location.host}/api/tmux/ws/${encodeURIComponent(name)}`);
   tmuxStreamSocket = ws;
 
-  ws.addEventListener("open", () => {
-    state.tmuxStreaming = true;
-    render();
-  });
+  ws.addEventListener("open", () => { state.tmuxStreaming = true; render(); });
 
   ws.addEventListener("message", (event) => {
     try {
@@ -391,15 +582,10 @@ function startTmuxStream(name) {
   ws.addEventListener("close", () => {
     tmuxStreamSocket = null;
     state.tmuxStreaming = false;
-    // Fall back to REST polling if the WebSocket closes unexpectedly
-    if (state.selectedTmuxSession === name) {
-      startTmuxPoll(name);
-    }
+    if (state.selectedTmuxSession === name) startTmuxPoll(name);
   });
 
-  ws.addEventListener("error", () => {
-    ws.close();
-  });
+  ws.addEventListener("error", () => { ws.close(); });
 }
 
 function stopTmuxStream() {
@@ -461,8 +647,6 @@ async function sendTmuxCommand() {
     body: JSON.stringify({ keys: cmd })
   });
 
-  // The WebSocket stream will pick up new output automatically.
-  // If streaming isn't active (fallback polling), force an immediate fetch.
   if (!state.tmuxStreaming) setTimeout(() => fetchTmuxOutput(session), 400);
 }
 
@@ -470,7 +654,6 @@ async function suggestTmuxCommand() {
   const session = state.selectedTmuxSession;
   if (!session || !state.tmuxOutput) return;
 
-  // Ask Claude to suggest next command based on pane output
   const truncated = state.tmuxOutput.slice(-2000);
   const prompt = `Based on this terminal output, suggest the single most useful next command to run:\n\`\`\`\n${truncated}\n\`\`\`\nReply with ONLY the command, nothing else.`;
 
@@ -538,6 +721,115 @@ async function draftEmail() {
   }
 }
 
+// ── Agent CRUD ────────────────────────────────────────────────────────────────
+
+async function saveAgent() {
+  const f = state.agentForm;
+  if (!f.name.trim() || !f.systemPrompt.trim()) return;
+
+  if (state.agentFormId) {
+    await fetch(`/api/agents/${state.agentFormId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(f)
+    });
+  } else {
+    await fetch("/api/agents", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(f)
+    });
+  }
+
+  state.agentFormOpen = false;
+  state.agentFormId = null;
+  await loadInitialData();
+}
+
+async function deleteAgent(id) {
+  await fetch(`/api/agents/${id}`, { method: "DELETE" });
+  state.selectedAgentIds = state.selectedAgentIds.filter((x) => x !== id);
+  await loadInitialData();
+}
+
+// ── Filesystem ────────────────────────────────────────────────────────────────
+
+async function loadFsDir(path) {
+  const res = await fetch(`/api/fs?path=${encodeURIComponent(path)}`);
+  const data = await res.json();
+  if (data.entries) {
+    state.codeDirContents[path] = data.entries;
+  }
+  render();
+}
+
+async function openFsFile(path) {
+  const res = await fetch(`/api/fs?path=${encodeURIComponent(path)}`);
+  const data = await res.json();
+  if (data.content !== undefined) {
+    state.codeFile = path;
+    state.codeContent = data.content;
+    state.codeSaved = true;
+    if (monacoEditor) {
+      const lang = inferLanguage(path);
+      window.monaco.editor.setModelLanguage(monacoEditor.getModel(), lang);
+      monacoEditor.setValue(data.content);
+    }
+  }
+  render();
+}
+
+async function saveFsFile() {
+  if (!state.codeFile) return;
+  const content = monacoEditor ? monacoEditor.getValue() : state.codeContent;
+  await fetch("/api/fs", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path: state.codeFile, content })
+  });
+  state.codeSaved = true;
+  render();
+}
+
+function codeToChat() {
+  let text = "";
+  if (monacoEditor) {
+    const sel = monacoEditor.getSelection();
+    text = monacoEditor.getModel().getValueInRange(sel);
+    if (!text.trim()) text = monacoEditor.getValue();
+  } else {
+    text = state.codeContent;
+  }
+  if (!text.trim()) return;
+  const fileName = state.codeFile?.split("/").pop() || "code-snippet.txt";
+  state.fileContexts = [...state.fileContexts, {
+    id: crypto.randomUUID(),
+    name: fileName,
+    content: text,
+    size: text.length
+  }];
+  state.activeTool = "chat";
+  render();
+}
+
+function defaultModel(provider) {
+  if (provider === "anthropic") return "claude-sonnet-4-6";
+  if (provider === "openai") return "gpt-5.5";
+  return "local-sim";
+}
+
+function inferLanguage(filePath) {
+  if (!filePath) return "plaintext";
+  const ext = (filePath.split(".").pop() ?? "").toLowerCase();
+  const map = {
+    ts: "typescript", tsx: "typescript", js: "javascript", jsx: "javascript",
+    py: "python", rs: "rust", go: "go", json: "json", md: "markdown",
+    css: "css", html: "html", sh: "shell", yaml: "yaml", yml: "yaml",
+    toml: "toml", txt: "plaintext",
+  };
+  return map[ext] || "plaintext";
+}
+
 // ── WebSocket ────────────────────────────────────────────────────────────────
 
 function connectSocket() {
@@ -581,6 +873,10 @@ function render() {
       ${renderEventRail()}
     </div>
   `;
+
+  if (state.activeTool === "code") {
+    requestAnimationFrame(mountMonaco);
+  }
 }
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
@@ -590,9 +886,7 @@ function renderSidebar(selectedSession, runningCount, readyConn) {
     <aside class="sidebar">
 
       <div class="brandBlock">
-        <div class="brandMark">
-          ${icon("zap")}
-        </div>
+        <div class="brandMark">${icon("zap")}</div>
         <div class="brandText">
           <h1>HYPERION</h1>
           <p>Agentic Harness</p>
@@ -609,7 +903,7 @@ function renderSidebar(selectedSession, runningCount, readyConn) {
       <div class="sidebarSection">
         <div class="secLabel">${icon("layers")} Tools</div>
         <div class="toolNav">
-          ${["chat","tmux","email","files"].map((t) => renderToolNavBtn(t)).join("")}
+          ${["chat","tmux","email","files","agents","code"].map((t) => renderToolNavBtn(t)).join("")}
         </div>
       </div>
 
@@ -639,7 +933,11 @@ function renderSidebar(selectedSession, runningCount, readyConn) {
             <button class="sessionBtn ${s.id === state.selectedSessionId ? "active" : ""}"
               data-action="select-session" data-id="${s.id}">
               <span>${esc(s.title)}</span>
-              <small>${s.runs.length} agents · ${s.status}</small>
+              <small>
+                <span class="dot ${s.status === "running" ? "running" : s.status === "completed" ? "ready" : s.status === "failed" ? "" : "mock"}"
+                  style="width:6px;height:6px;display:inline-block;margin-right:4px;${s.status === "failed" ? "background:var(--red);" : ""}"></span>
+                ${s.runs.length} agents · ${s.status}
+              </small>
             </button>
           `).join("") || `<p style="color:var(--text-muted);font-size:0.7rem;">No sessions yet</p>`}
         </div>
@@ -662,8 +960,8 @@ function renderProvider(p) {
 }
 
 function renderToolNavBtn(tool) {
-  const labels = { chat: "Chat", tmux: "tmux", email: "Email", files: "Files" };
-  const icons  = { chat: "message", tmux: "terminal", email: "inbox", files: "file" };
+  const labels = { chat: "Chat", tmux: "tmux", email: "Email", files: "Files", agents: "Agents", code: "Code" };
+  const icons  = { chat: "message", tmux: "terminal", email: "inbox", files: "file", agents: "cpu", code: "code" };
   return `
     <button class="toolNavBtn ${state.activeTool === tool ? "active" : ""}"
       data-action="switch-tool" data-value="${tool}">
@@ -675,11 +973,13 @@ function renderToolNavBtn(tool) {
 
 function renderSidebarAgent(a) {
   const sel = state.selectedAgentIds.includes(a.id);
+  const isCustom = a.id.startsWith("custom-");
   return `
-    <button class="agentBtn ${sel ? "selected" : ""}" data-action="toggle-agent" data-id="${a.id}">
+    <button class="agentBtn ${sel ? "selected" : ""}" data-action="toggle-agent" data-id="${a.id}"
+      title="${esc(a.description || a.name)}">
       <span class="agentAccent" style="background:${esc(a.accent)}"></span>
       <span>
-        <strong>${esc(a.name)}</strong>
+        <strong>${esc(a.name)}${isCustom ? ' <span style="font-size:0.55rem;color:var(--red);font-weight:700;letter-spacing:0.06em;">CUSTOM</span>' : ""}</strong>
         <small>${esc(a.provider)} · ${esc(a.model)}</small>
       </span>
       <svg class="checkIcon" viewBox="0 0 24 24"><path d="m20 6-11 11-5-5"/></svg>
@@ -705,10 +1005,12 @@ function renderConnector(c) {
 
 function renderWorkspace(selectedSession, runningCount) {
   const toolPanels = {
-    chat:  renderChatPanel(selectedSession, runningCount),
-    tmux:  renderTmuxPanel(),
-    email: renderEmailPanel(),
-    files: renderFilesPanel()
+    chat:   renderChatPanel(selectedSession, runningCount),
+    tmux:   renderTmuxPanel(),
+    email:  renderEmailPanel(),
+    files:  renderFilesPanel(),
+    agents: renderAgentsPanel(),
+    code:   renderCodePanel(),
   };
 
   return `
@@ -723,10 +1025,12 @@ function renderWorkspace(selectedSession, runningCount) {
       </div>
 
       <div class="toolTabBar">
-        ${renderToolTab("chat",  "message",  "CHAT")}
-        ${renderToolTab("tmux",  "terminal", "TMUX")}
-        ${renderToolTab("email", "inbox",    "EMAIL")}
-        ${renderToolTab("files", "file",     "FILES")}
+        ${renderToolTab("chat",   "message",  "CHAT")}
+        ${renderToolTab("tmux",   "terminal", "TMUX")}
+        ${renderToolTab("email",  "inbox",    "EMAIL")}
+        ${renderToolTab("files",  "file",     "FILES")}
+        ${renderToolTab("agents", "cpu",      "AGENTS")}
+        ${renderToolTab("code",   "code",     "CODE")}
       </div>
 
       <div class="toolPanel">
@@ -774,7 +1078,7 @@ function renderChatPanel(selectedSession, runningCount) {
               `).join("")}
             </div>
           ` : ""}
-          <label class="fieldLabel" for="prompt">Prompt</label>
+          <label class="fieldLabel" for="prompt">Prompt <span style="color:var(--text-muted);font-weight:400;font-size:0.58rem;margin-left:6px;">⌘↵ to run</span></label>
           <textarea id="prompt" rows="5" placeholder="Dispatch a mission to the crew…">${esc(state.prompt)}</textarea>
           <div class="promptActions">
             <div class="starterRow">
@@ -798,11 +1102,13 @@ function renderChatPanel(selectedSession, runningCount) {
           ${state.agents.map((a) => {
             const sel = state.selectedAgentIds.includes(a.id);
             return `
-              <button class="agentPickCard ${sel ? "selected" : ""}" data-action="toggle-agent" data-id="${a.id}">
+              <button class="agentPickCard ${sel ? "selected" : ""}" data-action="toggle-agent" data-id="${a.id}"
+                title="${esc(a.description || a.name)}">
                 <span class="agentAccent" style="background:${esc(a.accent)}"></span>
                 <span>
                   <strong>${esc(a.name)}</strong>
                   <small>${esc(a.provider)}</small>
+                  ${a.description ? `<small style="display:block;color:var(--text-muted);font-size:0.6rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(a.description)}</small>` : ""}
                 </span>
                 <svg viewBox="0 0 24 24" style="width:12px;height:12px;fill:none;stroke:${sel ? "var(--red)" : "var(--border-mid)"};stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0;">
                   <path d="m20 6-11 11-5-5"/>
@@ -863,7 +1169,6 @@ function renderStatusBadge(status) {
 function renderTmuxPanel() {
   const sessions = state.tmuxSessions;
   const selected = state.selectedTmuxSession;
-  const selectedInfo = sessions.find((s) => s.name === selected);
 
   return `
     <div class="tmuxPanel">
@@ -1017,6 +1322,208 @@ function renderFilesPanel() {
   `;
 }
 
+// ── Agents panel ──────────────────────────────────────────────────────────────
+
+function renderAgentsPanel() {
+  const builtin = state.agents.filter((a) => !a.id.startsWith("custom-"));
+  const custom  = state.agents.filter((a) => a.id.startsWith("custom-"));
+
+  return `
+    <div class="agentsPanel">
+      <div class="agentsPanelList">
+        ${builtin.length > 0 ? `
+          <div class="agentsPanelHeader">
+            <span class="fieldLabel">${icon("layers")} Built-in (${builtin.length})</span>
+          </div>
+          ${builtin.map((a) => renderAgentRow(a, false)).join("")}
+        ` : ""}
+
+        ${custom.length > 0 ? `
+          <div class="agentsPanelHeader" style="margin-top:14px;">
+            <span class="fieldLabel">${icon("cpu")} Custom (${custom.length})</span>
+          </div>
+          ${custom.map((a) => renderAgentRow(a, true)).join("")}
+        ` : `
+          <div class="emptyAgents">
+            ${icon("plus")}
+            <span>No custom agents yet</span>
+            <small>Create one to extend Hyperion with specialised instructions</small>
+          </div>
+        `}
+
+        <div style="margin-top:16px;">
+          <button class="btn btn-primary" data-action="open-agent-form" style="width:100%;">
+            ${icon("plus")} New Agent
+          </button>
+        </div>
+      </div>
+
+      <div class="agentFormPane">
+        ${state.agentFormOpen ? renderAgentForm() : `
+          <div class="agentFormPlaceholder">
+            ${icon("cpu")}
+            <span>Select an agent to edit, or create a new one</span>
+          </div>
+        `}
+      </div>
+    </div>
+  `;
+}
+
+function renderAgentRow(a, isCustom) {
+  return `
+    <div class="agentPanelRow">
+      <span style="width:3px;min-height:36px;border-radius:99px;background:${esc(a.accent)};flex-shrink:0;"></span>
+      <div style="flex:1;min-width:0;">
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+          <strong style="font-size:0.8rem;">${esc(a.name)}</strong>
+          ${isCustom ? `<span class="customBadge">CUSTOM</span>` : ""}
+        </div>
+        <small style="color:var(--text-dim);font-size:0.64rem;">${esc(a.provider)} · ${esc(a.model)}</small>
+        ${a.description ? `<small style="display:block;color:var(--text-muted);font-size:0.62rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(a.description)}</small>` : ""}
+      </div>
+      ${isCustom ? `
+        <div style="display:flex;gap:5px;flex-shrink:0;">
+          <button class="btn btn-icon" data-action="edit-agent" data-id="${a.id}" title="Edit">${icon("edit")}</button>
+          <button class="btn btn-icon" data-action="delete-agent" data-id="${a.id}" title="Delete" style="color:var(--red-hot);">${icon("trash")}</button>
+        </div>
+      ` : `<span style="font-size:0.58rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;flex-shrink:0;">built-in</span>`}
+    </div>
+  `;
+}
+
+function renderAgentForm() {
+  const f = state.agentForm;
+  const isEdit = Boolean(state.agentFormId);
+
+  return `
+    <div class="agentForm">
+      <div class="agentFormHeader">
+        ${icon("cpu")} ${isEdit ? "Edit Agent" : "New Agent"}
+      </div>
+
+      <div class="agentFormGrid">
+        <div class="emailField">
+          <label class="fieldLabel" for="agent-name">Name</label>
+          <input type="text" id="agent-name" placeholder="e.g. Research Assistant" value="${esc(f.name)}" />
+        </div>
+
+        <div class="emailField">
+          <label class="fieldLabel" for="agent-provider">Provider</label>
+          <select id="agent-provider" class="agentSelect">
+            <option value="openai"    ${f.provider === "openai"    ? "selected" : ""}>OpenAI</option>
+            <option value="anthropic" ${f.provider === "anthropic" ? "selected" : ""}>Anthropic</option>
+            <option value="mock"      ${f.provider === "mock"      ? "selected" : ""}>Mock</option>
+          </select>
+        </div>
+
+        <div class="emailField">
+          <label class="fieldLabel" for="agent-model">Model</label>
+          <input type="text" id="agent-model" placeholder="e.g. gpt-5.5" value="${esc(f.model)}" />
+        </div>
+
+        <div class="emailField">
+          <label class="fieldLabel">Accent Color</label>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input type="color" id="agent-accent" value="${esc(f.accent)}"
+              style="width:36px;height:32px;border:1px solid var(--border-mid);border-radius:var(--r-sm);background:var(--bg-input);cursor:pointer;padding:2px;flex-shrink:0;" />
+            <input type="text" id="agent-accent-text" placeholder="#cc1111" value="${esc(f.accent)}" style="flex:1;" />
+          </div>
+        </div>
+      </div>
+
+      <div class="emailField" style="margin-top:10px;">
+        <label class="fieldLabel" for="agent-description">Description <span style="font-weight:400;color:var(--text-muted);">(optional)</span></label>
+        <input type="text" id="agent-description" placeholder="One-line description shown in the agent picker" value="${esc(f.description)}" />
+      </div>
+
+      <div class="emailField" style="margin-top:10px;">
+        <label class="fieldLabel" for="agent-system-prompt">System Prompt</label>
+        <textarea id="agent-system-prompt" rows="7" placeholder="You are a…">${esc(f.systemPrompt)}</textarea>
+      </div>
+
+      <div style="display:flex;gap:8px;margin-top:14px;">
+        <button class="btn btn-secondary" data-action="cancel-agent-form">Cancel</button>
+        <button class="btn btn-primary" data-action="save-agent" style="flex:1;"
+          ${!f.name.trim() || !f.systemPrompt.trim() ? "disabled" : ""}>
+          ${icon("check")} ${isEdit ? "Save Changes" : "Create Agent"}
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+// ── Code panel ────────────────────────────────────────────────────────────────
+
+function renderCodePanel() {
+  const rootEntries = state.codeDirContents["."] ?? null;
+
+  return `
+    <div class="codePanel">
+      <div class="codeTree">
+        <div class="codeTreeHeader">
+          <span class="fieldLabel" style="font-size:0.6rem;">Project Files</span>
+          <button class="btn btn-icon" data-action="load-fs-dir" data-id="." title="Refresh">${icon("refresh")}</button>
+        </div>
+        <div class="codeTreeBody">
+          ${rootEntries === null
+            ? `<button class="codeTreeLoad" data-action="load-fs-dir" data-id=".">
+                 ${icon("folder")} Load project files
+               </button>`
+            : renderFsEntries(rootEntries, 0)
+          }
+        </div>
+      </div>
+
+      <div class="codeEditorArea">
+        <div class="codeEditorHeader">
+          <span class="codeFileName">${state.codeFile ? esc(state.codeFile) : "No file open"}</span>
+          <div style="display:flex;gap:6px;flex-shrink:0;">
+            ${state.codeFile ? `
+              <button class="btn btn-ghost" id="code-save-btn" data-action="save-fs-file">
+                ${state.codeSaved ? icon("check") + " Saved" : icon("circle") + " Save"}
+              </button>
+            ` : ""}
+            <button class="btn btn-ghost" data-action="code-to-chat"
+              title="Send selection (or full file) to chat as context"
+              ${!state.codeContent ? "disabled" : ""}>
+              ${icon("send")} To Chat
+            </button>
+          </div>
+        </div>
+        <div id="monaco-slot" style="flex:1;min-height:0;overflow:hidden;"></div>
+      </div>
+    </div>
+  `;
+}
+
+function renderFsEntries(entries, depth) {
+  return entries.map((e) => {
+    if (e.type === "dir") {
+      const expanded = state.codeExpanded[e.path];
+      const children = state.codeDirContents[e.path];
+      return `
+        <button class="codeTreeItem dir" data-action="toggle-fs-dir" data-id="${esc(e.path)}"
+          style="padding-left:${10 + depth * 14}px;" title="${esc(e.path)}">
+          <span class="codeTreeArrow">${expanded ? "▾" : "▸"}</span>
+          ${icon("folder")}
+          <span>${esc(e.name)}</span>
+        </button>
+        ${expanded && children ? renderFsEntries(children, depth + 1) : ""}
+      `;
+    } else {
+      const active = state.codeFile === e.path;
+      return `
+        <button class="codeTreeItem ${active ? "active" : ""}" data-action="open-fs-file" data-id="${esc(e.path)}"
+          style="padding-left:${24 + depth * 14}px;" title="${esc(e.path)}">
+          ${icon("file")}
+          <span>${esc(e.name)}</span>
+        </button>
+      `;
+    }
+  }).join("");
+}
+
 // ── Event rail ────────────────────────────────────────────────────────────────
 
 function renderEventRail() {
@@ -1091,9 +1598,12 @@ function icon(name) {
     "check-all":'<path d="m17 5-9.5 9.5-4-4"/><path d="m21 9-9.5 9.5"/>',
     circle:     '<circle cx="12" cy="12" r="8"/>',
     clock:      '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    code:       '<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>',
     copy:       '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
     cpu:        '<rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3"/><path d="M15 1v3"/><path d="M9 20v3"/><path d="M15 20v3"/><path d="M20 9h3"/><path d="M20 15h3"/><path d="M1 9h3"/><path d="M1 15h3"/>',
+    edit:       '<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>',
     file:       '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><polyline points="14 2 14 8 20 8"/>',
+    folder:     '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>',
     inbox:      '<path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5 5h14l3 7v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-6Z"/>',
     layers:     '<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>',
     loader:     '<path d="M21 12a9 9 0 1 1-6.219-8.56"/>',

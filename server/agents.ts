@@ -1,6 +1,6 @@
 import type { AgentConfig } from "../shared/types.ts";
 
-export function getAgents(): AgentConfig[] {
+export function getBuiltinAgents(): AgentConfig[] {
   const openAiModel = Deno.env.get("OPENAI_MODEL")?.trim() || "gpt-5.5";
   const claudeModel = Deno.env.get("CLAUDE_MODEL")?.trim() || "claude-sonnet-4-20250514";
 
@@ -52,6 +52,3 @@ export function getAgents(): AgentConfig[] {
   ];
 }
 
-export function findAgent(agentId: string) {
-  return getAgents().find((agent) => agent.id === agentId);
-}

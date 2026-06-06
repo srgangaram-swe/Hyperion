@@ -1,4 +1,5 @@
-import { findAgent, getAgents } from "./agents.ts";
+import { getBuiltinAgents } from "./agents.ts";
+import { listCustomAgents, addCustomAgent, editCustomAgent, deleteCustomAgent } from "./agentStore.ts";
 import { getConnectors } from "./connectors.ts";
 import { providerConfigured, streamAgentResponse } from "./providers.ts";
 import {
@@ -31,7 +32,19 @@ await loadEnvFile();
 
 const port = Number(Deno.env.get("PORT") || 8787);
 const vectorUrl = Deno.env.get("VECTOR_MEMORY_URL")?.replace(/\/$/, "") || "";
-const agents = getAgents();
+
+let agents: AgentConfig[] = [];
+
+async function refreshAgents() {
+  const custom = await listCustomAgents();
+  agents = [...getBuiltinAgents(), ...custom];
+}
+
+await refreshAgents();
+
+function findAgent(id: string): AgentConfig | undefined {
+  return agents.find((a) => a.id === id);
+}
 const clients = new Set<WebSocket>();
 const sessions = new Map<string, AgentSession>();
 const events: SessionEvent[] = [];
@@ -122,6 +135,86 @@ async function handleApi(request: Request, url: URL): Promise<Response> {
   // ── Agents ────────────────────────────────────────────────────────────────
   if (url.pathname === "/api/agents" && request.method === "GET") {
     return json({ agents, providers: getProviderHealth() });
+  }
+
+  if (url.pathname === "/api/agents" && request.method === "POST") {
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body !== "object") return json({ error: "Expected JSON" }, 400);
+    const { name, provider, model, systemPrompt, description, accent, tools } = body as Record<string, unknown>;
+    if (!name || !provider || !model || !systemPrompt) {
+      return json({ error: "name, provider, model, systemPrompt required" }, 400);
+    }
+    const agent = await addCustomAgent({
+      name: String(name), provider: provider as AgentConfig["provider"],
+      model: String(model), systemPrompt: String(systemPrompt),
+      description: String(description ?? ""), accent: String(accent ?? "#cc1111"),
+      tools: Array.isArray(tools) ? tools as string[] : [],
+    });
+    await refreshAgents();
+    addEvent({ sessionId: "system", type: "session", level: "success", message: `Agent created: ${agent.name}` });
+    return json({ agent }, 201);
+  }
+
+  const agentIdMatch = url.pathname.match(/^\/api\/agents\/([^/]+)$/);
+
+  if (agentIdMatch && request.method === "PATCH") {
+    const updated = await editCustomAgent(agentIdMatch[1], await request.json().catch(() => ({})));
+    if (!updated) return json({ error: "Not found or built-in agent" }, 404);
+    await refreshAgents();
+    return json({ agent: updated });
+  }
+
+  if (agentIdMatch && request.method === "DELETE") {
+    const ok = await deleteCustomAgent(agentIdMatch[1]);
+    if (!ok) return json({ error: "Not found or built-in agent" }, 404);
+    await refreshAgents();
+    addEvent({ sessionId: "system", type: "session", level: "warning", message: `Agent deleted: ${agentIdMatch[1]}` });
+    return json({ ok: true });
+  }
+
+  // ── Filesystem browser ────────────────────────────────────────────────────
+  if (url.pathname === "/api/fs" && request.method === "GET") {
+    const userPath = url.searchParams.get("path") ?? ".";
+    const safe = resolveFsPath(userPath);
+    if (!safe) return json({ error: "Forbidden" }, 403);
+    try {
+      const stat = await Deno.stat(safe);
+      if (stat.isDirectory) {
+        const skip = new Set(["node_modules", ".git", "__pycache__", ".venv", "dist", "dist-server", "deno.lock"]);
+        const entries: { name: string; type: string; path: string }[] = [];
+        for await (const e of Deno.readDir(safe)) {
+          if (e.name.startsWith(".") || skip.has(e.name)) continue;
+          entries.push({
+            name: e.name,
+            type: e.isDirectory ? "dir" : "file",
+            path: (userPath === "." || userPath === "/") ? e.name : `${userPath}/${e.name}`,
+          });
+        }
+        entries.sort((a, b) => (a.type !== b.type ? (a.type === "dir" ? -1 : 1) : a.name.localeCompare(b.name)));
+        return json({ type: "dir", path: userPath, entries });
+      } else {
+        const content = await Deno.readTextFile(safe);
+        return json({ type: "file", path: userPath, content });
+      }
+    } catch (e) {
+      return json({ error: e instanceof Error ? e.message : "Read error" }, 500);
+    }
+  }
+
+  if (url.pathname === "/api/fs" && request.method === "POST") {
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body.path !== "string" || typeof body.content !== "string") {
+      return json({ error: "path and content required" }, 400);
+    }
+    const safe = resolveFsPath(body.path);
+    if (!safe) return json({ error: "Forbidden" }, 403);
+    try {
+      await Deno.writeTextFile(safe, body.content);
+      addEvent({ sessionId: "system", type: "session", level: "info", message: `Saved: ${body.path}` });
+      return json({ ok: true });
+    } catch (e) {
+      return json({ error: e instanceof Error ? e.message : "Write error" }, 500);
+    }
   }
 
   // ── Connectors ────────────────────────────────────────────────────────────
@@ -596,9 +689,23 @@ function json(payload: unknown, status = 200) {
 
 function corsHeaders(headers = new Headers()): Headers {
   headers.set("access-control-allow-origin", "*");
-  headers.set("access-control-allow-methods", "GET, POST, DELETE, OPTIONS");
+  headers.set("access-control-allow-methods", "GET, POST, PATCH, DELETE, OPTIONS");
   headers.set("access-control-allow-headers", "content-type");
   return headers;
+}
+
+function resolveFsPath(userPath: string): string | null {
+  const root = Deno.env.get("FS_ROOT") || Deno.cwd();
+  if (!userPath || userPath === "." || userPath === "/") return root;
+  const parts = userPath.replace(/\\/g, "/").split("/");
+  const safe: string[] = [];
+  for (const p of parts) {
+    if (p === "..") safe.pop();
+    else if (p && p !== ".") safe.push(p);
+  }
+  const resolved = `${root}/${safe.join("/")}`;
+  if (!resolved.startsWith(root)) return null;
+  return resolved;
 }
 
 async function serveStatic(url: URL) {
