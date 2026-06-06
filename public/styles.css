@@ -1752,3 +1752,91 @@ input[type="text"]:focus, input[type="email"]:focus {
   text-overflow: ellipsis;
   min-width: 0;
 }
+
+/* ═══ DIFF VIEW ════════════════════════════════════════════════════════════ */
+
+.diffView {
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  line-height: 1.6;
+  overflow: auto;
+  padding: 8px 0;
+  height: 100%;
+}
+
+.diffView::-webkit-scrollbar { width: 4px; height: 4px; }
+.diffView::-webkit-scrollbar-thumb { background: var(--red-dim); border-radius: 99px; }
+
+.diff-meta {
+  padding: 2px 14px;
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  white-space: pre;
+}
+
+.diff-file {
+  padding: 5px 14px;
+  color: #d4a855;
+  background: rgba(212, 168, 85, 0.07);
+  font-weight: 700;
+  white-space: pre;
+  border-top: 1px solid rgba(212, 168, 85, 0.18);
+  margin-top: 4px;
+}
+
+.diff-hunk {
+  padding: 3px 14px;
+  color: #5588cc;
+  background: rgba(60, 100, 180, 0.1);
+  white-space: pre;
+  border-left: 3px solid #3366aa;
+}
+
+.diff-add {
+  padding: 1px 14px;
+  background: rgba(0, 180, 80, 0.1);
+  color: #55dd88;
+  white-space: pre;
+  border-left: 3px solid #00aa44;
+}
+
+.diff-del {
+  padding: 1px 14px;
+  background: rgba(204, 17, 17, 0.1);
+  color: #ff6666;
+  white-space: pre;
+  border-left: 3px solid var(--red);
+}
+
+.diff-ctx {
+  padding: 1px 14px;
+  color: var(--text-dim);
+  white-space: pre;
+}
+
+/* Code-panel diff pane (replaces Monaco when git diff is shown) */
+.codeDiffPane {
+  flex: 1;
+  overflow: auto;
+  background: #040404;
+  min-height: 0;
+}
+
+.codeDiffPane::-webkit-scrollbar { width: 4px; }
+.codeDiffPane::-webkit-scrollbar-thumb { background: var(--red-dim); border-radius: 99px; }
+
+/* DIFF badge on run cards */
+.diffBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  border-radius: 99px;
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: rgba(60, 100, 180, 0.15);
+  color: #6699dd;
+  border: 1px solid rgba(60, 100, 180, 0.3);
+  flex-shrink: 0;
+}

@@ -103,6 +103,10 @@ const state = {
   codeExpanded: {},
   codeDirContents: {},
   codeSaved: true,
+  codeDiff: null,       // null = editor visible; string = git diff shown
+
+  // diff — per run-card toggle (undefined = auto, false = forced raw)
+  runDiffMode: {},
 };
 
 let tmuxPollTimer = null;
@@ -474,6 +478,22 @@ function handleAction(action, value, el, e) {
     case "code-to-chat":
       codeToChat();
       break;
+
+    case "toggle-run-diff":
+      // value is runId; flip: if currently in diff mode → force raw, else → auto (diff if detected)
+      state.runDiffMode[value] = state.runDiffMode[value] === false ? undefined : false;
+      render();
+      break;
+
+    case "show-git-diff":
+      fetchGitDiff();
+      break;
+
+    case "hide-git-diff":
+      state.codeDiff = null;
+      render();
+      requestAnimationFrame(mountMonaco);
+      break;
   }
 }
 
@@ -812,6 +832,50 @@ function codeToChat() {
   render();
 }
 
+async function fetchGitDiff() {
+  if (!state.codeFile) return;
+  const res = await fetch(`/api/git/diff?path=${encodeURIComponent(state.codeFile)}`);
+  const data = await res.json();
+  state.codeDiff = data.diff || "(no changes — file matches HEAD)";
+  render();
+}
+
+// Returns true when agent output contains a parseable unified diff.
+function looksLikeDiff(text) {
+  if (!text || text.length < 20) return false;
+  if (/```diff\n/.test(text)) return true;
+  return /^--- /m.test(text) && /^\+\+\+ /m.test(text) && /^@@ /m.test(text);
+}
+
+// Strip fenced code-block markers so the diff parser sees clean lines.
+function extractDiff(text) {
+  const fenced = text.match(/```(?:diff)?\n([\s\S]*?)```/);
+  return fenced ? fenced[1] : text;
+}
+
+function renderDiff(text) {
+  const lines = extractDiff(text).split("\n");
+  const rows = lines.map((line) => {
+    if (line.startsWith("diff ") || line.startsWith("index ") || line.startsWith("old mode") || line.startsWith("new mode")) {
+      return `<div class="diff-meta">${esc(line)}</div>`;
+    }
+    if (line.startsWith("--- ") || line.startsWith("+++ ")) {
+      return `<div class="diff-file">${esc(line)}</div>`;
+    }
+    if (line.startsWith("@@")) {
+      return `<div class="diff-hunk">${esc(line)}</div>`;
+    }
+    if (line.startsWith("+")) {
+      return `<div class="diff-add">${esc(line)}</div>`;
+    }
+    if (line.startsWith("-")) {
+      return `<div class="diff-del">${esc(line)}</div>`;
+    }
+    return `<div class="diff-ctx">${esc(line)}</div>`;
+  }).join("");
+  return `<div class="diffView">${rows}</div>`;
+}
+
 function defaultModel(provider) {
   if (provider === "anthropic") return "claude-sonnet-4-6";
   if (provider === "openai") return "gpt-5.5";
@@ -1139,7 +1203,12 @@ function renderChatPanel(selectedSession, runningCount) {
 
 function renderRunCard(run) {
   const agent = state.agents.find((a) => a.id === run.agentId);
-  const output = run.output || run.error || "Queued…";
+  const rawOutput = run.output || run.error || "Queued…";
+
+  // Auto-enable diff view when completed output contains a diff; respect manual toggle
+  const isDiff = run.status === "completed" && looksLikeDiff(run.output);
+  const diffMode = isDiff && state.runDiffMode[run.id] !== false;
+
   return `
     <article class="runCard ${run.status}" style="--accent:${esc(agent?.accent ?? "#555")}">
       <header>
@@ -1147,9 +1216,18 @@ function renderRunCard(run) {
           <h4>${esc(run.agentName)}</h4>
           <p>${esc(run.provider)} / ${esc(run.model)}</p>
         </div>
-        ${renderStatusBadge(run.status)}
+        <div style="display:flex;gap:6px;align-items:center;">
+          ${isDiff ? `
+            <span class="diffBadge">DIFF</span>
+            <button class="btn btn-ghost" style="font-size:0.62rem;padding:3px 8px;"
+              data-action="toggle-run-diff" data-id="${run.id}">
+              ${diffMode ? "Raw" : "Diff"}
+            </button>
+          ` : ""}
+          ${renderStatusBadge(run.status)}
+        </div>
       </header>
-      <pre>${esc(output)}</pre>
+      ${diffMode ? renderDiff(run.output) : `<pre>${esc(rawOutput)}</pre>`}
       ${run.error ? `<div class="errorLine">${icon("alert")} ${esc(run.error)}</div>` : ""}
     </article>
   `;
@@ -1479,11 +1557,16 @@ function renderCodePanel() {
         <div class="codeEditorHeader">
           <span class="codeFileName">${state.codeFile ? esc(state.codeFile) : "No file open"}</span>
           <div style="display:flex;gap:6px;flex-shrink:0;">
-            ${state.codeFile ? `
+            ${state.codeFile && state.codeDiff === null ? `
               <button class="btn btn-ghost" id="code-save-btn" data-action="save-fs-file">
                 ${state.codeSaved ? icon("check") + " Saved" : icon("circle") + " Save"}
               </button>
             ` : ""}
+            ${state.codeFile ? (
+              state.codeDiff !== null
+                ? `<button class="btn btn-ghost" data-action="hide-git-diff">${icon("x")} Close Diff</button>`
+                : `<button class="btn btn-ghost" data-action="show-git-diff">${icon("diff")} Git Diff</button>`
+            ) : ""}
             <button class="btn btn-ghost" data-action="code-to-chat"
               title="Send selection (or full file) to chat as context"
               ${!state.codeContent ? "disabled" : ""}>
@@ -1491,7 +1574,10 @@ function renderCodePanel() {
             </button>
           </div>
         </div>
-        <div id="monaco-slot" style="flex:1;min-height:0;overflow:hidden;"></div>
+        ${state.codeDiff !== null
+          ? `<div class="codeDiffPane">${renderDiff(state.codeDiff)}</div>`
+          : `<div id="monaco-slot" style="flex:1;min-height:0;overflow:hidden;"></div>`
+        }
       </div>
     </div>
   `;
@@ -1601,6 +1687,7 @@ function icon(name) {
     code:       '<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>',
     copy:       '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
     cpu:        '<rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3"/><path d="M15 1v3"/><path d="M9 20v3"/><path d="M15 20v3"/><path d="M20 9h3"/><path d="M20 15h3"/><path d="M1 9h3"/><path d="M1 15h3"/>',
+    diff:       '<path d="M12 3v18"/><path d="M17 8l-5-5-5 5"/><path d="M7 16l5 5 5-5"/>',
     edit:       '<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>',
     file:       '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><polyline points="14 2 14 8 20 8"/>',
     folder:     '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>',

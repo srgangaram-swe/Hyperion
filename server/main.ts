@@ -172,6 +172,20 @@ async function handleApi(request: Request, url: URL): Promise<Response> {
     return json({ ok: true });
   }
 
+  // ── Git diff ─────────────────────────────────────────────────────────────
+  if (url.pathname === "/api/git/diff" && request.method === "GET") {
+    const filePath = url.searchParams.get("path") ?? "";
+    try {
+      const args = filePath ? ["diff", "HEAD", "--", filePath] : ["diff", "HEAD"];
+      const cmd = new Deno.Command("git", { args, stdout: "piped", stderr: "piped" });
+      const { stdout } = await cmd.output();
+      const diff = new TextDecoder().decode(stdout);
+      return json({ diff });
+    } catch {
+      return json({ diff: "" });
+    }
+  }
+
   // ── Filesystem browser ────────────────────────────────────────────────────
   if (url.pathname === "/api/fs" && request.method === "GET") {
     const userPath = url.searchParams.get("path") ?? ".";
