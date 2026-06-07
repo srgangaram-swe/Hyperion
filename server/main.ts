@@ -673,6 +673,20 @@ async function handleApi(request: Request, url: URL): Promise<Response> {
     return json({ session }, 201);
   }
 
+  const orchestrateIdMatch = url.pathname.match(/^\/api\/orchestrate\/([^/]+)$/);
+  if (orchestrateIdMatch && request.method === "DELETE") {
+    const id = orchestrateIdMatch[1];
+    const s = orchestratorSessions.get(id);
+    if (!s) return json({ error: "Not found" }, 404);
+    if (s.status === "running" || s.status === "planning") {
+      runControllers.get(id)?.abort();
+      s.status = "cancelled";
+    }
+    orchestratorSessions.delete(id);
+    broadcast("orchestrator:snapshot", Array.from(orchestratorSessions.values()));
+    return json({ ok: true });
+  }
+
   const orchestrateAbortMatch = url.pathname.match(/^\/api\/orchestrate\/([^/]+)\/abort$/);
   if (orchestrateAbortMatch && request.method === "POST") {
     const s = orchestratorSessions.get(orchestrateAbortMatch[1]);

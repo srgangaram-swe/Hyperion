@@ -83,6 +83,7 @@ const state = {
   autopilotSelectedId: null,
   autopilotPausedRunId: null,
   autopilotModifyTask: "",
+  autopilotRunCollapsed: {},
 
   // Workspace
   workspace: { rootDir: ".", tmuxSession: null },
@@ -410,6 +411,17 @@ function handleAction(action, value, el, e) {
       break;
     case "select-autopilot":
       state.autopilotSelectedId = value;
+      render();
+      break;
+    case "delete-autopilot":
+      e.stopPropagation();
+      deleteAutopilotSession(value);
+      break;
+    case "clear-autopilot-done":
+      clearDoneAutopilotSessions();
+      break;
+    case "toggle-run-collapse":
+      state.autopilotRunCollapsed[value] = !state.autopilotRunCollapsed[value];
       render();
       break;
     case "pause-run":
@@ -812,6 +824,25 @@ async function launchAutopilot() {
 async function abortAutopilot(id) {
   await fetch(`/api/orchestrate/${id}/abort`, { method: "POST" });
   await loadAutopilotSessions();
+}
+
+async function deleteAutopilotSession(id) {
+  await fetch(`/api/orchestrate/${id}`, { method: "DELETE" });
+  state.autopilotSessions = state.autopilotSessions.filter((s) => s.id !== id);
+  if (state.autopilotSelectedId === id) {
+    state.autopilotSelectedId = state.autopilotSessions[0]?.id ?? null;
+  }
+  render();
+}
+
+function clearDoneAutopilotSessions() {
+  const done = state.autopilotSessions.filter((s) => s.status !== "running" && s.status !== "planning");
+  done.forEach((s) => fetch(`/api/orchestrate/${s.id}`, { method: "DELETE" }).catch(() => {}));
+  state.autopilotSessions = state.autopilotSessions.filter((s) => s.status === "running" || s.status === "planning");
+  if (!state.autopilotSessions.find((s) => s.id === state.autopilotSelectedId)) {
+    state.autopilotSelectedId = state.autopilotSessions[0]?.id ?? null;
+  }
+  render();
 }
 
 async function pauseAutopilotRun(runId) {
@@ -1694,18 +1725,29 @@ function renderAutopilotPanel() {
           </div>
         </div>
 
+        <div class="autopilotSessionListHeader">
+          <span class="fieldLabel" style="font-size:0.58rem;">History</span>
+          ${state.autopilotSessions.some((s) => s.status !== "running" && s.status !== "planning") ? `
+            <button class="btn btn-ghost" style="font-size:0.58rem;padding:2px 7px;" data-action="clear-autopilot-done">
+              ${icon("trash")} Clear done
+            </button>
+          ` : ""}
+        </div>
         <div class="autopilotSessionList">
           ${state.autopilotSessions.length === 0
             ? `<p style="color:var(--text-muted);font-size:0.7rem;padding:10px;">No autopilot sessions yet</p>`
             : state.autopilotSessions.map((s) => `
-              <button class="autopilotSessionItem ${s.id === state.autopilotSelectedId ? "active" : ""}"
+              <div class="autopilotSessionItem ${s.id === state.autopilotSelectedId ? "active" : ""}"
                 data-action="select-autopilot" data-id="${s.id}">
                 <span class="dot ${s.status === "running" ? "running" : s.status === "completed" ? "ready" : "mock"}" style="width:6px;height:6px;flex-shrink:0;"></span>
                 <div style="flex:1;min-width:0;text-align:left;">
-                  <strong style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(s.goal.slice(0, 50))}</strong>
+                  <strong style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(s.goal.slice(0, 46))}</strong>
                   <small>${s.status} · ${s.runs?.length ?? 0} agents</small>
                 </div>
-              </button>
+                <button class="btn btn-icon" data-action="delete-autopilot" data-id="${s.id}"
+                  style="width:20px;height:20px;flex-shrink:0;color:var(--text-muted);"
+                  title="Delete session">${icon("x")}</button>
+              </div>
             `).join("")}
         </div>
       </div>
@@ -1769,6 +1811,7 @@ function renderAutopilotSession(sess) {
 
 function renderAutopilotRun(run, sess) {
   const isPaused = state.autopilotPausedRunId === run.id;
+  const isCollapsed = state.autopilotRunCollapsed[run.id] === true;
   const statusColor = { running: "var(--amber)", completed: "var(--green)", failed: "var(--red)", queued: "var(--text-muted)", cancelled: "var(--text-muted)" }[run.status] ?? "var(--text-muted)";
 
   return `
@@ -1791,24 +1834,30 @@ function renderAutopilotRun(run, sess) {
             : ""
           }
           ${renderStatusBadge(run.status)}
+          <button class="btn btn-icon" data-action="toggle-run-collapse" data-id="${run.id}"
+            style="width:22px;height:22px;flex-shrink:0;" title="${isCollapsed ? "Expand" : "Collapse"}">
+            ${isCollapsed ? icon("plus") : icon("x")}
+          </button>
         </div>
       </div>
 
-      <div class="autopilotRunTask">${esc(run.task.slice(0, 120))}${run.task.length > 120 ? "…" : ""}</div>
+      ${isCollapsed ? "" : `
+        <div class="autopilotRunTask">${esc(run.task.slice(0, 120))}${run.task.length > 120 ? "…" : ""}</div>
 
-      ${run.tools?.length > 0 ? `
-        <div class="autopilotRunTools">
-          ${run.tools.map((t) => `<span class="toolPill">${t}</span>`).join("")}
-        </div>
-      ` : ""}
+        ${run.tools?.length > 0 ? `
+          <div class="autopilotRunTools">
+            ${run.tools.map((t) => `<span class="toolPill">${t}</span>`).join("")}
+          </div>
+        ` : ""}
 
-      ${run.output ? `
-        <div class="autopilotRunOutput">
-          <pre>${esc(run.output.slice(-2000))}${run.output.length > 2000 ? "\n[…]" : ""}</pre>
-        </div>
-      ` : ""}
+        ${run.output ? `
+          <div class="autopilotRunOutput">
+            <pre>${esc(run.output.slice(-2000))}${run.output.length > 2000 ? "\n[…]" : ""}</pre>
+          </div>
+        ` : ""}
 
-      ${run.error ? `<div class="errorLine">${icon("alert")} ${esc(run.error)}</div>` : ""}
+        ${run.error ? `<div class="errorLine">${icon("alert")} ${esc(run.error)}</div>` : ""}
+      `}
     </div>
   `;
 }
