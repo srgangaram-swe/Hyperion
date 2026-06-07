@@ -1,30 +1,55 @@
 # Hyperion
 
-> **A self-hosted agentic harness with a red Matrix-themed UI — run OpenAI and Anthropic agents in parallel, manage tmux sessions, draft emails with AI, and inject local file context, all from one streaming dashboard.**
-
----
+> A self-hosted agentic AI operations console. Point it at any codebase, give it a goal, and watch a fleet of AI agents plan the work, split it across parallel and serial tasks, read and write real files, run shell commands, and hand you a git diff when they are done.
 
 ## What it is
 
-Hyperion is a **local-first AI operations console** built for power users who want more than a chat window. It orchestrates multiple AI agents simultaneously, gives each one real tools (shell sessions, email, file context, persistent memory), and streams every token of output to a live dashboard — all running on your own machine with no cloud dependency beyond the model APIs.
+Hyperion is a **local-first AI ops console** built for engineers who want more than a chat window. It runs a Deno/TypeScript server behind a dark red Matrix-themed browser UI. You can orchestrate multi-agent pipelines with a single natural-language prompt, manage tmux sessions, draft emails with AI, browse and edit code with a Monaco editor, manage SSH connections, and configure custom agents — all from one streaming dashboard.
 
-The UI is intentionally stark: a dark red Matrix-style terminal aesthetic that makes it feel like you're running a mission control, not clicking around a SaaS product.
+The entire system runs on your machine. The only external dependency is the model API (Anthropic Claude, OpenAI, or both).
+
+The UI is intentionally stark: canvas matrix rain in red, scanlines, glow effects, and JetBrains Mono throughout.
 
 ---
 
-## Features
+## Eight tool panels
 
-| Feature | Detail |
-|---------|--------|
-| **Multi-agent sessions** | Dispatch one prompt to multiple agents (OpenAI + Anthropic) in parallel; watch streams side-by-side |
-| **Red Matrix UI** | Dark theme with canvas Matrix rain, scanlines, glow effects, JetBrains Mono throughout |
-| **tmux integration** | List, create, kill sessions; stream live `capture-pane` output; send commands; ask AI to suggest the next command |
-| **AI email drafting** | Claude streams a reply draft in real time given any email thread; choose tone (professional / casual / concise) |
-| **File context injection** | Drag-and-drop or paste files; content is automatically prepended to the next agent prompt |
-| **Persistent memory** | Agents can read/write tagged facts, preferences, skills, and context across sessions (JSON-backed) |
-| **Live event stream** | Every session, run, tool call, and error appears in real time in the Signal Stream rail |
-| **Mock mode** | No API keys? All agents fall back to deterministic mock streaming so the UI always works |
-| **WebSocket first** | All state updates — token deltas, session status, events — flow over a single WebSocket connection |
+### CHAT
+Multi-agent composer. Select which agents to include, attach file context chips, write a prompt, and hit Run. Each agent streams into its own card simultaneously. Supports mid-stream abort.
+
+### TMUX
+Live terminal session management. Sessions listed on the left; live `capture-pane` output on the right, polled every two seconds. Send commands from the input bar. The AI button sends the current pane output to Claude and asks it to suggest the next command.
+
+### EMAIL
+Provide a thread or topic, pick a tone (professional, casual, concise), and click Draft with AI. Claude streams a reply draft in real time. Edit inline and copy to your mail client.
+
+### FILES
+Drag-and-drop or paste files. Content is automatically prepended to the next agent session as structured context blocks.
+
+### AGENTS
+Create and manage custom agent configurations. Set the name, provider, model, system prompt, accent colour, and tool access. Agents persist across restarts in `data/agents.json`.
+
+### CODE
+Monaco editor (the VS Code engine) embedded in the browser. Browse the workspace directory tree, open files, and view git diffs. When Autopilot completes a run, you can click "Hyperion Diff" on any session to see the full `git diff HEAD` for every file the agents touched.
+
+### SSH
+Saved SSH connection manager. Add connections (label, host, user, port, key path) and open any of them directly in a new tmux window with one click. Connections persist in `data/ssh-connections.json`.
+
+### AUTOPILOT
+The meta-agent orchestrator. Give it a single natural-language goal and a workspace directory. A planner agent (Claude or GPT) reads the goal and produces a JSON pipeline: 2-4 focused sub-agents, each with a specific task, a tool set, and a dependency graph that determines whether they run in parallel or in serial.
+
+Each agent then runs its own autonomous tool-use loop:
+
+| Tool | What it does |
+|------|-------------|
+| `fs_read` | Read a file from the workspace (up to 20 KB) |
+| `fs_write` | Write or overwrite a file |
+| `fs_list` | List a directory |
+| `tmux_run` | Execute a shell command via tmux and capture output |
+
+Everything is visible in real time: the plan appears as it is generated, each agent's token-by-token output streams live, and every tool call is shown. You can pause any agent mid-run, edit its task, and resume. When a session completes, written files appear as green chips on each agent card. The Hyperion Diff button runs `git diff HEAD` across all session-written files and renders the result in the Code panel.
+
+Autopilot has been used to improve its own codebase from a single prompt, which makes it a practical test for any engineering workflow you point it at.
 
 ---
 
@@ -32,27 +57,35 @@ The UI is intentionally stark: a dark red Matrix-style terminal aesthetic that m
 
 ```
 Browser (http://127.0.0.1:8787)
-    │
-    │  WebSocket (ws://) + REST (http://)
-    ▼
+    |
+    |  WebSocket (ws://) + REST (http://)
+    v
 Deno server (server/main.ts)
-    ├─ providers.ts    — OpenAI Responses API + Anthropic Messages API streaming adapters
-    ├─ agents.ts       — agent roster (provider, model, system prompt, accent colour)
-    ├─ connectors.ts   — connector readiness (Gmail/IMAP, SMTP, Calendar, Slack, tmux)
-    ├─ tmux.ts         — Deno.Command subprocess wrapper for tmux
-    └─ memory.ts       — JSON-backed persistent memory (list, add, edit, delete, search)
-    │
-    ├─ /api/sessions        — create, list, abort multi-agent sessions
-    ├─ /api/tmux/*          — tmux session management + pane capture
-    ├─ /api/draft-email     — Claude SSE stream for email drafting
-    └─ /api/memory          — persistent memory CRUD + keyword search
-    │
-    │  HTTPS API calls
-    ▼
+    |-- providers.ts    OpenAI + Anthropic streaming adapters
+    |-- agents.ts       Agent roster and custom agent CRUD
+    |-- orchestrator.ts Autopilot planner + tool-use loop
+    |-- ssh.ts          SSH connection CRUD (data/ssh-connections.json)
+    |-- utils.ts        Path-safe file resolution, tmux helpers
+    |-- connectors.ts   Connector readiness checks
+    |-- tmux.ts         Deno.Command wrapper for tmux
+    |-- memory.ts       JSON-backed persistent memory
+    |
+    |-- /api/sessions         multi-agent session CRUD
+    |-- /api/orchestrate      Autopilot session CRUD + WebSocket events
+    |-- /api/orchestrate/:id/diff  git diff for session-written files
+    |-- /api/ssh              SSH connection CRUD
+    |-- /api/tmux/*           tmux session management + pane capture
+    |-- /api/draft-email      Claude SSE stream for email drafting
+    |-- /api/memory           persistent memory CRUD + keyword search
+    |-- /api/files/list       workspace directory listing
+    |-- /api/files/read       workspace file content
+    |
+    |  HTTPS API calls
+    v
 OpenAI / Anthropic APIs
 ```
 
-**Stack:** Deno · TypeScript · vanilla JS (no bundler, no framework) · WebSocket · SSE
+**Stack:** Deno, TypeScript, vanilla JS (no bundler, no framework), WebSocket, SSE, Monaco Editor (AMD CDN)
 
 ---
 
@@ -60,9 +93,9 @@ OpenAI / Anthropic APIs
 
 ### Prerequisites
 
-- [Deno](https://deno.land/) v1.40+  (`curl -fsSL https://deno.land/install.sh | sh`)
-- API keys for OpenAI and/or Anthropic (see [Getting API Keys](#getting-api-keys))
-- `tmux` installed if you want the terminal panel (`brew install tmux` / `apt install tmux`)
+- [Deno](https://deno.land/) v1.40 or later (`curl -fsSL https://deno.land/install.sh | sh`)
+- API keys for OpenAI and/or Anthropic
+- `tmux` installed for the terminal panel (`brew install tmux` on macOS)
 
 ### Run
 
@@ -70,65 +103,44 @@ OpenAI / Anthropic APIs
 git clone https://github.com/srgangaram-swe/Hyperion.git
 cd Hyperion
 cp .env.example .env
-# Edit .env — paste your ANTHROPIC_API_KEY and/or OPENAI_API_KEY
+# Edit .env and add your ANTHROPIC_API_KEY and/or OPENAI_API_KEY
 deno task dev
 ```
 
-Open **http://127.0.0.1:8787** — the dashboard loads instantly. Without keys, agents run in mock streaming mode so you can explore the UI.
+Open **http://127.0.0.1:8787**. Without keys, agents run in mock streaming mode so the UI is always explorable.
 
 ---
 
-## Getting API Keys
+## Getting API keys
 
 ### Anthropic Claude
 
 1. Go to [console.anthropic.com](https://console.anthropic.com/) and create an account.
-2. Navigate to **API Keys** → **Create Key**.
-3. Paste the key into `.env`:
+2. Navigate to API Keys and create a key.
+3. Add to `.env`:
    ```
    ANTHROPIC_API_KEY=sk-ant-api03-...
    ```
-4. Set a **monthly budget cap** under Billing → Usage limits (start with $20).
+4. Set a monthly budget cap under Billing to avoid surprises.
 
-**Models available (set `CLAUDE_MODEL` in `.env`):**
+**Models (set `CLAUDE_MODEL` in `.env`):**
+
 | Model | Use case |
 |-------|---------|
-| `claude-haiku-4-5-20251001` | Fast, cheapest — routine tasks, drafts |
-| `claude-sonnet-4-6` | Balanced — best daily driver (default) |
-| `claude-opus-4-8` | Most capable — complex reasoning only |
-
-> Claude.ai Pro/Max subscriptions are **not** the same as API access. You need a key from `console.anthropic.com`.
+| `claude-haiku-4-5-20251001` | Fast and cheap; good for routine tasks |
+| `claude-sonnet-4-6` | Balanced; best daily driver (default) |
+| `claude-opus-4-8` | Most capable; use for complex reasoning |
 
 ### OpenAI
 
 1. Go to [platform.openai.com](https://platform.openai.com/) and create an account.
-2. Navigate to **API keys** → **Create new secret key**.
-3. Paste the key into `.env`:
+2. Navigate to API keys and create a secret key.
+3. Add to `.env`:
    ```
    OPENAI_API_KEY=sk-proj-...
    ```
-4. Set a monthly usage limit under **Billing → Usage limits**.
 
-**Model (set `OPENAI_MODEL` in `.env`):**
-```
-OPENAI_MODEL=gpt-4o        # recommended
-```
-
----
-
-## Tool panels
-
-### CHAT
-The main multi-agent composer. Select which agents to include, attach file context (shown as chips), write a prompt, and hit **Run**. Each agent streams into its own card.
-
-### TMUX
-Live terminal session management. Sessions listed on the left; live `capture-pane` output on the right, polled every 2 seconds. Type commands in the input bar (Enter to send). **AI ▸** sends the current pane output to Claude and asks it to suggest the next command.
-
-### EMAIL
-Provide a thread or topic, pick a tone, and click **Draft with AI** — Claude streams a reply draft in real time. Edit the draft, then copy it into your mail client. Full IMAP/SMTP integration (configurable via `.env`) is on the roadmap.
-
-### FILES
-Drag-and-drop files or paste text. Content is automatically prepended to the next session's prompt as structured context blocks.
+**Recommended model:** `gpt-4o`
 
 ---
 
@@ -142,7 +154,10 @@ ANTHROPIC_API_KEY=
 CLAUDE_MODEL=claude-sonnet-4-6
 OPENAI_API_KEY=
 OPENAI_MODEL=gpt-4o
-AGENT_MAX_TOKENS=4096
+AGENT_MAX_TOKENS=8192
+
+# Autopilot workspace (optional — set per-session in the UI)
+FS_ROOT=
 
 # Email connectors (optional)
 IMAP_HOST=
@@ -156,32 +171,51 @@ SMTP_PASS=
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
 
-# Microsoft 365 (optional)
-MICROSOFT_CLIENT_ID=
-MICROSOFT_CLIENT_SECRET=
-
 # Slack (optional)
 SLACK_BOT_TOKEN=
 ```
 
 ---
 
+## Autopilot in depth
+
+### How it works
+
+1. You provide a goal (natural language) and a workspace directory path.
+2. A planner agent reads the goal and returns a JSON pipeline with 2-4 sub-agents. Each agent has a `role`, `task`, `provider`, `model`, `tools`, and a `dependsOn` index list that controls ordering.
+3. Agents with no dependencies run in parallel. Agents that depend on earlier ones run after those complete, using handoff files in `tmp/` to pass data between stages.
+4. Each agent runs a multi-turn tool-use loop until it either signals completion or exhausts its tool calls.
+5. All output streams live to the UI. Written files are tracked per agent and shown as clickable green chips on the run card.
+
+### Human-in-the-loop controls
+
+- **Pause / Resume** any running agent
+- **Modify task** while paused: edit the agent's task prompt and resume with the new instruction
+- **Abort** the entire session at any time
+- **Hyperion Diff**: after completion, view the full `git diff HEAD` for everything the session wrote
+
+### Configuring the planner
+
+The planner defaults to Claude Sonnet. You can switch any individual agent to OpenAI by changing the `provider` field returned in the plan, or override the planner model via the workspace config in the UI.
+
+---
+
 ## Persistent memory
 
-Agents can read and write to a JSON-backed memory store at `data/memory.json`. Four categories:
+Backed by `data/memory.json`. Four categories:
 
-| Category | Examples |
+| Category | Example |
 |----------|---------|
-| `fact` | "User is a PhD researcher in computational biology" |
+| `fact` | "User is a data scientist at LANL" |
 | `preference` | "Always format code with 2-space indentation" |
-| `context` | "Current project: tmux integration for Hyperion" |
+| `context` | "Current project: Hyperion orchestrator improvements" |
 | `skill` | "Agent knows how to search arXiv for papers" |
 
 **API:**
 ```
-GET  /api/memory?category=fact&q=search+query&limit=20
-POST /api/memory          { category, text, tags, agentId }
-PATCH /api/memory/:id     { text?, tags?, category? }
+GET    /api/memory?category=fact&q=search+query&limit=20
+POST   /api/memory          { category, text, tags, agentId }
+PATCH  /api/memory/:id      { text?, tags?, category? }
 DELETE /api/memory/:id
 ```
 
@@ -191,18 +225,18 @@ DELETE /api/memory/:id
 
 See [ROADMAP.md](ROADMAP.md) for the full list. Near-term priorities:
 
-- [ ] IMAP inbox polling with AI triage (auto-classify urgency, draft replies)
-- [ ] Vector memory with local embeddings (upgrade keyword search to semantic)
-- [ ] Deep research mode (multi-step web search → synthesize → visual report)
-- [ ] WebSocket PTY streaming for a proper in-browser terminal
-- [ ] Multi-user auth (bcrypt + session tokens)
-- [ ] CalDAV calendar integration
+- WebSocket PTY for a fully interactive in-browser terminal
+- Vector memory with local embeddings (semantic search replacing keyword search)
+- Deep research mode (multi-step web search → synthesize → visual report)
+- IMAP inbox polling with AI triage and auto-draft replies
+- Session persistence to SQLite (survive server restarts)
+- Docker Compose packaging for one-command deployment
 
 ---
 
 ## Contributing
 
-Issues and PRs welcome. See `.github/` for templates.
+Issues and pull requests welcome. See `.github/` for templates.
 
 ---
 
