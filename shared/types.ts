@@ -6,7 +6,7 @@ export type SessionStatus = "queued" | "running" | "completed" | "failed" | "can
 
 export type EventLevel = "info" | "success" | "warning" | "error";
 
-export type ToolId = "chat" | "tmux" | "email" | "files";
+export type ToolId = "chat" | "tmux" | "email" | "files" | "ssh" | "autopilot";
 
 export interface AgentConfig {
   id: string;
@@ -57,7 +57,7 @@ export interface SessionEvent {
   runId?: string;
   agentId?: string;
   level: EventLevel;
-  type: "session" | "run" | "delta" | "connector" | "tmux" | "email";
+  type: "session" | "run" | "delta" | "connector" | "tmux" | "email" | "orchestrator" | "ssh";
   message: string;
   delta?: string;
   createdAt: string;
@@ -84,7 +84,7 @@ export interface RunDeltaPayload {
   delta: string;
 }
 
-// ── tmux ────────────────────────────────────────────────────────────────────
+// tmux
 
 export interface TmuxSession {
   name: string;
@@ -98,7 +98,7 @@ export interface TmuxOutput {
   capturedAt: string;
 }
 
-// ── File context ─────────────────────────────────────────────────────────────
+// File context
 
 export interface FileContext {
   id: string;
@@ -107,7 +107,7 @@ export interface FileContext {
   size: number;
 }
 
-// ── Email ────────────────────────────────────────────────────────────────────
+// Email
 
 export interface EmailDraftRequest {
   context: string;
@@ -125,7 +125,7 @@ export interface IncomingEmail {
   autoTriage?: boolean;
 }
 
-// ── Vector memory ─────────────────────────────────────────────────────────────
+// Vector memory
 
 export interface VectorSearchHit {
   id: string;
@@ -134,4 +134,74 @@ export interface VectorSearchHit {
   tags: string[];
   agent_id?: string;
   score: number;
+}
+
+// SSH
+
+export interface SshConnection {
+  id: string;
+  label: string;
+  host: string;
+  user: string;
+  port?: number;
+  keyPath?: string;
+  description?: string;
+  createdAt: string;
+}
+
+export interface SshCommandResult {
+  ok: boolean;
+  stdout: string;
+  stderr: string;
+  exitCode: number;
+}
+
+// Orchestrator (Autopilot)
+
+export type OrchestratorPlanStatus = "idle" | "planning" | "planned" | "running" | "done" | "failed";
+
+export type OrchestratorStatus = "idle" | "planning" | "running" | "paused" | "completed" | "failed" | "cancelled";
+
+export interface PlannedAgent {
+  role: string;
+  provider: ProviderId;
+  model: string;
+  task: string;
+  tools: string[];
+  dependsOn: number[];
+}
+
+export interface OrchestratorRun {
+  id: string;
+  index: number;
+  role: string;
+  task: string;
+  provider: ProviderId;
+  model: string;
+  tools: string[];
+  status: RunStatus;
+  output: string;
+  error?: string;
+  startedAt?: string;
+  completedAt?: string;
+}
+
+export interface OrchestratorSession {
+  id: string;
+  goal: string;
+  workDir: string;
+  tmuxSession: string | null;
+  status: OrchestratorStatus;
+  planStatus: OrchestratorPlanStatus;
+  plan: { reasoning: string; pipeline: string; agents: PlannedAgent[] } | null;
+  runs: OrchestratorRun[];
+  createdAt: string;
+  completedAt?: string;
+}
+
+// Workspace
+
+export interface WorkspaceConfig {
+  rootDir: string;
+  tmuxSession: string | null;
 }

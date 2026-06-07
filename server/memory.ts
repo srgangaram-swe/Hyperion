@@ -27,7 +27,7 @@ export interface MemoryEntry {
   updatedAt: string;
 }
 
-// ── Persistence (JSON flat-file — no native sqlite3 dep required) ──────────
+// Persistence (JSON flat-file — no native sqlite3 dep required)
 
 async function ensureDataDir() {
   try {
@@ -51,7 +51,7 @@ async function saveStore(entries: MemoryEntry[]): Promise<void> {
   await Deno.writeTextFile(MEMORY_FILE, JSON.stringify(entries, null, 2));
 }
 
-// ── Public API ─────────────────────────────────────────────────────────────
+// Public API
 
 export async function listMemories(opts?: {
   category?: MemoryCategory;

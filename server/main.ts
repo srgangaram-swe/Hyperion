@@ -16,6 +16,18 @@ import {
   deleteMemory,
   searchMemory
 } from "./memory.ts";
+import {
+  listSshConnections,
+  getSshConnection,
+  addSshConnection,
+  editSshConnection,
+  deleteSshConnection,
+  runSshCommand,
+  testSshConnection,
+  openSshInTmux,
+} from "./ssh.ts";
+import { orchestrate, pauseOrchestratorRun, resumeOrchestratorRun } from "./orchestrator.ts";
+import { resolveFsPath } from "./utils.ts";
 import type {
   AgentRun,
   AgentSession,
@@ -25,7 +37,9 @@ import type {
   ProviderHealth,
   RunDeltaPayload,
   SessionEvent,
-  SessionStatus
+  SessionStatus,
+  OrchestratorSession,
+  WorkspaceConfig,
 } from "../shared/types.ts";
 
 await loadEnvFile();
@@ -47,8 +61,15 @@ function findAgent(id: string): AgentConfig | undefined {
 }
 const clients = new Set<WebSocket>();
 const sessions = new Map<string, AgentSession>();
+const orchestratorSessions = new Map<string, OrchestratorSession>();
 const events: SessionEvent[] = [];
 const runControllers = new Map<string, AbortController>();
+
+// Workspace config (in-memory, persisted separately)
+let workspace: WorkspaceConfig = {
+  rootDir: Deno.env.get("FS_ROOT") || Deno.cwd(),
+  tmuxSession: null,
+};
 
 // tmux WebSocket clients: sessionName → Set of open sockets
 const tmuxClients = new Map<string, Set<WebSocket>>();
@@ -60,7 +81,7 @@ if (vectorUrl) console.log(`\x1b[31m[HYPERION]\x1b[0m Vector memory → ${vector
 async function handleRequest(request: Request): Promise<Response> {
   const url = new URL(request.url);
 
-  // ── CORS pre-flight (for local dev) ──────────────────────────────────────
+  // CORS pre-flight (for local dev)
   if (request.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: corsHeaders() });
   }
@@ -81,7 +102,7 @@ async function handleRequest(request: Request): Promise<Response> {
     return response;
   }
 
-  // ── tmux live-stream WebSocket (/api/tmux/ws/:sessionName) ─────────────────
+  // tmux live-stream WebSocket (/api/tmux/ws/:sessionName)
   const tmuxWsMatch = url.pathname.match(/^\/api\/tmux\/ws\/([^/]+)$/);
   if (tmuxWsMatch) {
     const sessionName = decodeURIComponent(tmuxWsMatch[1]);
@@ -127,12 +148,12 @@ async function handleRequest(request: Request): Promise<Response> {
 }
 
 async function handleApi(request: Request, url: URL): Promise<Response> {
-  // ── Health ────────────────────────────────────────────────────────────────
+  // Health
   if (url.pathname === "/api/health" && request.method === "GET") {
     return json({ ok: true, providers: getProviderHealth(), name: "Hyperion" });
   }
 
-  // ── Agents ────────────────────────────────────────────────────────────────
+  // Agents
   if (url.pathname === "/api/agents" && request.method === "GET") {
     return json({ agents, providers: getProviderHealth() });
   }
@@ -172,7 +193,7 @@ async function handleApi(request: Request, url: URL): Promise<Response> {
     return json({ ok: true });
   }
 
-  // ── Git diff ─────────────────────────────────────────────────────────────
+  // Git diff
   if (url.pathname === "/api/git/diff" && request.method === "GET") {
     const filePath = url.searchParams.get("path") ?? "";
     try {
@@ -186,10 +207,10 @@ async function handleApi(request: Request, url: URL): Promise<Response> {
     }
   }
 
-  // ── Filesystem browser ────────────────────────────────────────────────────
+  // Filesystem browser
   if (url.pathname === "/api/fs" && request.method === "GET") {
     const userPath = url.searchParams.get("path") ?? ".";
-    const safe = resolveFsPath(userPath);
+    const safe = resolveFsPath(userPath, workspace.rootDir);
     if (!safe) return json({ error: "Forbidden" }, 403);
     try {
       const stat = await Deno.stat(safe);
@@ -220,7 +241,7 @@ async function handleApi(request: Request, url: URL): Promise<Response> {
     if (!body || typeof body.path !== "string" || typeof body.content !== "string") {
       return json({ error: "path and content required" }, 400);
     }
-    const safe = resolveFsPath(body.path);
+    const safe = resolveFsPath(body.path, workspace.rootDir);
     if (!safe) return json({ error: "Forbidden" }, 403);
     try {
       await Deno.writeTextFile(safe, body.content);
@@ -231,17 +252,17 @@ async function handleApi(request: Request, url: URL): Promise<Response> {
     }
   }
 
-  // ── Connectors ────────────────────────────────────────────────────────────
+  // Connectors
   if (url.pathname === "/api/connectors" && request.method === "GET") {
     return json({ connectors: getConnectors() });
   }
 
-  // ── Events ────────────────────────────────────────────────────────────────
+  // Events
   if (url.pathname === "/api/events" && request.method === "GET") {
     return json({ events: events.slice(-250) });
   }
 
-  // ── Sessions ──────────────────────────────────────────────────────────────
+  // Sessions
   if (url.pathname === "/api/sessions" && request.method === "GET") {
     return json({ sessions: listSessionsSorted() });
   }
@@ -286,7 +307,7 @@ async function handleApi(request: Request, url: URL): Promise<Response> {
     return json({ session });
   }
 
-  // ── tmux API ─────────────────────────────────────────────────────────────
+  // tmux API
 
   if (url.pathname === "/api/tmux/sessions" && request.method === "GET") {
     const sessions = await tmuxList();
@@ -339,7 +360,7 @@ async function handleApi(request: Request, url: URL): Promise<Response> {
     return json(result);
   }
 
-  // ── Email draft (SSE) ─────────────────────────────────────────────────────
+  // Email draft (SSE)
 
   if (url.pathname === "/api/draft-email" && request.method === "POST") {
     const body: EmailDraftRequest = await request.json().catch(() => ({ context: "" }));
@@ -406,7 +427,7 @@ async function handleApi(request: Request, url: URL): Promise<Response> {
     });
   }
 
-  // ── Email webhook (from Python email poller) ──────────────────────────────
+  // Email webhook (from Python email poller)
 
   if (url.pathname === "/api/webhooks/email" && request.method === "POST") {
     const body = await request.json().catch(() => null);
@@ -448,7 +469,7 @@ async function handleApi(request: Request, url: URL): Promise<Response> {
     return json({ ok: true });
   }
 
-  // ── Memory API ──────────────────────────────────────────────────────────────
+  // Memory API
 
   if (url.pathname === "/api/memory" && request.method === "GET") {
     const category = url.searchParams.get("category") as any ?? undefined;
@@ -515,10 +536,170 @@ async function handleApi(request: Request, url: URL): Promise<Response> {
     return ok ? json({ ok: true }) : json({ error: "Not found" }, 404);
   }
 
+  // Workspace config
+  if (url.pathname === "/api/workspace" && request.method === "GET") {
+    return json({ workspace });
+  }
+
+  if (url.pathname === "/api/workspace" && request.method === "POST") {
+    const body = await request.json().catch(() => ({}));
+    if (typeof body.rootDir === "string") workspace.rootDir = body.rootDir;
+    if ("tmuxSession" in body) workspace.tmuxSession = body.tmuxSession ?? null;
+    addEvent({ sessionId: "system", type: "session", level: "info", message: `Workspace: ${workspace.rootDir}` });
+    return json({ workspace });
+  }
+
+  // SSH connections
+  if (url.pathname === "/api/ssh" && request.method === "GET") {
+    return json({ connections: await listSshConnections() });
+  }
+
+  if (url.pathname === "/api/ssh" && request.method === "POST") {
+    const body = await request.json().catch(() => ({}));
+    const { label, host, user, port, keyPath, description } = body;
+    if (!label || !host || !user) return json({ error: "label, host, user required" }, 400);
+    const conn = await addSshConnection({ label, host, user, port, keyPath, description });
+    addEvent({ sessionId: "system", type: "ssh", level: "success", message: `SSH connection added: ${conn.label}` });
+    return json({ connection: conn }, 201);
+  }
+
+  const sshIdMatch = url.pathname.match(/^\/api\/ssh\/([^/]+)$/);
+
+  if (sshIdMatch && request.method === "PATCH") {
+    const body = await request.json().catch(() => ({}));
+    const updated = await editSshConnection(sshIdMatch[1], body);
+    return updated ? json({ connection: updated }) : json({ error: "Not found" }, 404);
+  }
+
+  if (sshIdMatch && request.method === "DELETE") {
+    const ok = await deleteSshConnection(sshIdMatch[1]);
+    return ok ? json({ ok: true }) : json({ error: "Not found" }, 404);
+  }
+
+  const sshTestMatch = url.pathname.match(/^\/api\/ssh\/([^/]+)\/test$/);
+  if (sshTestMatch && request.method === "POST") {
+    const conn = await getSshConnection(sshTestMatch[1]);
+    if (!conn) return json({ error: "Not found" }, 404);
+    const result = await testSshConnection(conn);
+    addEvent({ sessionId: "system", type: "ssh", level: result.ok ? "success" : "error", message: `SSH test ${conn.label}: ${result.ok ? "OK" : result.stderr}` });
+    return json(result);
+  }
+
+  const sshRunMatch = url.pathname.match(/^\/api\/ssh\/([^/]+)\/run$/);
+  if (sshRunMatch && request.method === "POST") {
+    const conn = await getSshConnection(sshRunMatch[1]);
+    if (!conn) return json({ error: "Not found" }, 404);
+    const body = await request.json().catch(() => ({}));
+    const command = typeof body.command === "string" ? body.command : "";
+    if (!command) return json({ error: "command required" }, 400);
+    const result = await runSshCommand(conn, command);
+    addEvent({ sessionId: "system", type: "ssh", level: "info", message: `SSH [${conn.label}] $ ${command.slice(0, 60)}` });
+    return json(result);
+  }
+
+  const sshTmuxMatch = url.pathname.match(/^\/api\/ssh\/([^/]+)\/tmux$/);
+  if (sshTmuxMatch && request.method === "POST") {
+    const conn = await getSshConnection(sshTmuxMatch[1]);
+    if (!conn) return json({ error: "Not found" }, 404);
+    const body = await request.json().catch(() => ({}));
+    const tmuxSession = typeof body.tmuxSession === "string" ? body.tmuxSession : workspace.tmuxSession;
+    if (!tmuxSession) return json({ error: "tmuxSession required" }, 400);
+    const result = await openSshInTmux(conn, tmuxSession);
+    if (result.ok) addEvent({ sessionId: "system", type: "ssh", level: "success", message: `SSH ${conn.label} opened in tmux:${tmuxSession}` });
+    return json(result);
+  }
+
+  // Orchestrator (Autopilot)
+  if (url.pathname === "/api/orchestrate" && request.method === "GET") {
+    return json({ sessions: Array.from(orchestratorSessions.values()).sort((a, b) => b.createdAt.localeCompare(a.createdAt)) });
+  }
+
+  if (url.pathname === "/api/orchestrate" && request.method === "POST") {
+    const body = await request.json().catch(() => ({}));
+    const goal = typeof body.goal === "string" ? body.goal.trim() : "";
+    if (!goal) return json({ error: "goal required" }, 400);
+
+    const workDir = typeof body.workDir === "string" ? body.workDir : workspace.rootDir;
+    const tmuxSession = typeof body.tmuxSession === "string" ? body.tmuxSession : workspace.tmuxSession;
+
+    const session: OrchestratorSession = {
+      id: crypto.randomUUID(),
+      goal,
+      workDir,
+      tmuxSession,
+      status: "planning",
+      planStatus: "planning",
+      plan: null,
+      runs: [],
+      createdAt: new Date().toISOString(),
+    };
+    orchestratorSessions.set(session.id, session);
+    addEvent({ sessionId: session.id, type: "orchestrator", level: "info", message: `Autopilot: ${goal.slice(0, 80)}` });
+    broadcast("orchestrator:snapshot", Array.from(orchestratorSessions.values()));
+
+    const controller = new AbortController();
+    runControllers.set(session.id, controller);
+
+    (async () => {
+      try {
+        for await (const event of orchestrate(
+          session,
+          workDir,
+          tmuxSession,
+          Deno.env.get("ANTHROPIC_API_KEY") ?? "",
+          Deno.env.get("OPENAI_API_KEY") ?? "",
+          controller.signal
+        )) {
+          broadcast("orchestrator:event", { sessionId: session.id, event });
+          broadcast("orchestrator:snapshot", Array.from(orchestratorSessions.values()));
+          if (event.type === "agent_start") {
+            addEvent({ sessionId: session.id, type: "orchestrator", level: "info", message: `[${event.index + 1}/${event.total}] ${event.role} started` });
+          } else if (event.type === "agent_done") {
+            addEvent({ sessionId: session.id, type: "orchestrator", level: "success", message: `${session.runs[session.runs.length - 1]?.role ?? "Agent"} done` });
+          } else if (event.type === "agent_error") {
+            addEvent({ sessionId: session.id, type: "orchestrator", level: "error", message: `Agent error: ${event.error.slice(0, 80)}` });
+          } else if (event.type === "tool_call") {
+            addEvent({ sessionId: session.id, type: "orchestrator", level: "info", message: `Tool: ${event.tool}(${JSON.stringify(event.args).slice(0, 60)})` });
+          } else if (event.type === "done") {
+            addEvent({ sessionId: session.id, type: "orchestrator", level: "success", message: "Autopilot complete" });
+          }
+        }
+      } finally {
+        runControllers.delete(session.id);
+        broadcast("orchestrator:snapshot", Array.from(orchestratorSessions.values()));
+      }
+    })();
+
+    return json({ session }, 201);
+  }
+
+  const orchestrateAbortMatch = url.pathname.match(/^\/api\/orchestrate\/([^/]+)\/abort$/);
+  if (orchestrateAbortMatch && request.method === "POST") {
+    const s = orchestratorSessions.get(orchestrateAbortMatch[1]);
+    if (!s) return json({ error: "Not found" }, 404);
+    runControllers.get(s.id)?.abort();
+    s.status = "cancelled";
+    broadcast("orchestrator:snapshot", Array.from(orchestratorSessions.values()));
+    return json({ ok: true });
+  }
+
+  const orchestratePauseMatch = url.pathname.match(/^\/api\/orchestrate\/([^/]+)\/pause\/([^/]+)$/);
+  if (orchestratePauseMatch && request.method === "POST") {
+    const ok = pauseOrchestratorRun(orchestratePauseMatch[1], orchestratePauseMatch[2]);
+    return json({ ok });
+  }
+
+  const orchestrateResumeMatch = url.pathname.match(/^\/api\/orchestrate\/([^/]+)\/resume\/([^/]+)$/);
+  if (orchestrateResumeMatch && request.method === "POST") {
+    const body = await request.json().catch(() => ({}));
+    const ok = resumeOrchestratorRun(orchestrateResumeMatch[1], orchestrateResumeMatch[2], body.modifiedTask);
+    return json({ ok });
+  }
+
   return json({ error: "Not found" }, 404);
 }
 
-// ── Session orchestration ──────────────────────────────────────────────────
+// Session orchestration
 
 function createSession(request: CreateSessionRequest): AgentSession {
   const selectedAgents = request.agentIds
@@ -665,7 +846,7 @@ function titleFromPrompt(prompt: string) {
   return compact.length > 56 ? `${compact.slice(0, 56)}…` : compact;
 }
 
-// ── WebSocket helpers ─────────────────────────────────────────────────────
+// WebSocket helpers
 
 function listSessionsSorted() {
   return Array.from(sessions.values()).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -692,7 +873,7 @@ function send(client: WebSocket, type: string, payload: unknown) {
   if (client.readyState === WebSocket.OPEN) client.send(JSON.stringify({ type, payload }));
 }
 
-// ── HTTP helpers ──────────────────────────────────────────────────────────
+// HTTP helpers
 
 function json(payload: unknown, status = 200) {
   return new Response(JSON.stringify(payload), {
@@ -708,19 +889,6 @@ function corsHeaders(headers = new Headers()): Headers {
   return headers;
 }
 
-function resolveFsPath(userPath: string): string | null {
-  const root = Deno.env.get("FS_ROOT") || Deno.cwd();
-  if (!userPath || userPath === "." || userPath === "/") return root;
-  const parts = userPath.replace(/\\/g, "/").split("/");
-  const safe: string[] = [];
-  for (const p of parts) {
-    if (p === "..") safe.pop();
-    else if (p && p !== ".") safe.push(p);
-  }
-  const resolved = `${root}/${safe.join("/")}`;
-  if (!resolved.startsWith(root)) return null;
-  return resolved;
-}
 
 async function serveStatic(url: URL) {
   const pathname = url.pathname === "/" ? "/index.html" : url.pathname;
@@ -744,7 +912,7 @@ function contentType(pathname: string) {
   return "application/octet-stream";
 }
 
-// ── .env loader ───────────────────────────────────────────────────────────
+// .env loader
 
 async function loadEnvFile() {
   try {

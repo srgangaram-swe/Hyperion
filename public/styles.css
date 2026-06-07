@@ -1,6 +1,4 @@
-/* ═══════════════════════════════════════════════════════════════════════════
-   HYPERION — Red Matrix dark theme
-   ═══════════════════════════════════════════════════════════════════════════ */
+/* HYPERION — Red Matrix dark theme */
 
 :root {
   /* Core palette */
@@ -50,7 +48,7 @@
   --ease: 0.18s ease;
 }
 
-/* ── Reset ─────────────────────────────────────────────────────────────── */
+/* Reset */
 
 *, *::before, *::after { box-sizing: border-box; }
 
@@ -90,7 +88,7 @@ body::after {
   z-index: 9000;
 }
 
-/* ── Matrix rain canvas ─────────────────────────────────────────────────── */
+/* Matrix rain canvas */
 
 #matrix-rain {
   position: fixed;
@@ -100,7 +98,7 @@ body::after {
   pointer-events: none;
 }
 
-/* ── App shell ──────────────────────────────────────────────────────────── */
+/* App shell */
 
 #app {
   position: relative;
@@ -117,7 +115,7 @@ body::after {
   gap: 0;
 }
 
-/* ═══ SIDEBAR ═══════════════════════════════════════════════════════════════ */
+/* SIDEBAR */
 
 .sidebar {
   display: flex;
@@ -417,7 +415,7 @@ body::after {
   color: var(--text-dim);
 }
 
-/* ═══ MAIN WORKSPACE ════════════════════════════════════════════════════════ */
+/* MAIN WORKSPACE */
 
 .workspace {
   display: flex;
@@ -533,7 +531,7 @@ body::after {
   overflow: hidden;
 }
 
-/* ─── CHAT PANEL ─────────────────────────────────────────────────────────── */
+/* CHAT PANEL */
 
 .chatPanel {
   display: flex;
@@ -838,7 +836,7 @@ textarea::placeholder { color: var(--text-muted); }
 
 .emptyState span { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.1em; }
 
-/* ─── TMUX PANEL ─────────────────────────────────────────────────────────── */
+/* TMUX PANEL */
 
 .tmuxPanel {
   display: grid;
@@ -1047,7 +1045,7 @@ textarea::placeholder { color: var(--text-muted); }
   box-shadow: 0 0 8px var(--red-glow-sm);
 }
 
-/* ─── EMAIL PANEL ────────────────────────────────────────────────────────── */
+/* EMAIL PANEL */
 
 .emailPanel {
   display: grid;
@@ -1147,7 +1145,7 @@ input[type="text"]:focus, input[type="email"]:focus {
   border-radius: var(--r-md);
 }
 
-/* ─── FILES PANEL ────────────────────────────────────────────────────────── */
+/* FILES PANEL */
 
 .filesPanel {
   display: flex;
@@ -1231,7 +1229,7 @@ input[type="text"]:focus, input[type="email"]:focus {
   line-height: 1.5;
 }
 
-/* ═══ EVENT RAIL ════════════════════════════════════════════════════════════ */
+/* EVENT RAIL */
 
 .eventRail {
   display: flex;
@@ -1309,7 +1307,7 @@ input[type="text"]:focus, input[type="email"]:focus {
   overflow-wrap: anywhere;
 }
 
-/* ═══ SHARED BUTTONS ════════════════════════════════════════════════════════ */
+/* SHARED BUTTONS */
 
 .btn {
   display: inline-flex;
@@ -1397,7 +1395,378 @@ input[type="text"]:focus, input[type="email"]:focus {
 
 .spin { animation: spin 0.9s linear infinite; }
 
-/* ═══ CONNECTOR PILLS ═══════════════════════════════════════════════════════ */
+/* Workspace inputs in sidebar */
+.workspaceRow {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+
+.wsInput {
+  flex: 1;
+  border: 1px solid var(--border-mid);
+  border-radius: var(--r-sm);
+  padding: 5px 8px;
+  background: var(--bg-input);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  min-width: 0;
+  transition: border-color var(--ease);
+}
+
+.wsInput:focus { outline: none; border-color: var(--red); }
+
+.wsSelect {
+  width: 100%;
+  border: 1px solid var(--border-mid);
+  border-radius: var(--r-sm);
+  padding: 5px 8px;
+  background: var(--bg-input);
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  outline: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  transition: border-color var(--ease);
+}
+
+.wsSelect:focus { border-color: var(--red); }
+
+/* SSH panel */
+.sshPanel {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  height: 100%;
+  overflow: hidden;
+}
+
+.sshSidebar {
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg-panel);
+}
+
+.sshSidebarHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.sshForm {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-card);
+  flex-shrink: 0;
+}
+
+.sshFormRow {
+  display: flex;
+  gap: 10px;
+}
+
+.sshConnectionList {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.sshConnectionList::-webkit-scrollbar { width: 3px; }
+.sshConnectionList::-webkit-scrollbar-thumb { background: var(--red-dim); border-radius: 99px; }
+
+.sshConnItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--bg-card);
+  cursor: pointer;
+  transition: all var(--ease);
+}
+
+.sshConnItem:hover { border-color: var(--border-mid); background: var(--bg-hover); }
+
+.sshConnItem.active {
+  border-color: var(--red-border);
+  background: var(--red-ghost);
+  box-shadow: inset 3px 0 0 var(--red);
+}
+
+.sshConnItem strong {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sshConnItem small {
+  display: block;
+  font-size: 0.64rem;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sshMain {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #040404;
+}
+
+.sshMainHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-panel);
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--text);
+}
+
+/* Autopilot panel */
+.autopilotPanel {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  height: 100%;
+  overflow: hidden;
+}
+
+.autopilotSidebar {
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg-panel);
+}
+
+.autopilotGoalArea {
+  padding: 14px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.autopilotGoalArea textarea {
+  min-height: 80px;
+  font-size: 0.76rem;
+}
+
+.autopilotSessionList {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.autopilotSessionList::-webkit-scrollbar { width: 3px; }
+.autopilotSessionList::-webkit-scrollbar-thumb { background: var(--red-dim); border-radius: 99px; }
+
+.autopilotSessionItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--bg-card);
+  color: var(--text);
+  width: 100%;
+  text-align: left;
+  transition: all var(--ease);
+}
+
+.autopilotSessionItem:hover { border-color: var(--border-mid); background: var(--bg-hover); }
+
+.autopilotSessionItem.active {
+  border-color: var(--red-border);
+  background: var(--red-ghost);
+  box-shadow: inset 3px 0 0 var(--red);
+}
+
+.autopilotSessionItem strong { font-size: 0.76rem; }
+.autopilotSessionItem small  { font-size: 0.62rem; color: var(--text-dim); display: block; }
+
+.autopilotMain {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.autopilotSessionView {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.autopilotSessionView::-webkit-scrollbar { width: 4px; }
+.autopilotSessionView::-webkit-scrollbar-thumb { background: var(--red-dim); border-radius: 99px; }
+
+.autopilotSessionHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.autopilotPlanBar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 1px solid var(--border-mid);
+  border-radius: var(--r-md);
+  background: var(--bg-panel);
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+
+.autopilotPlanBar svg {
+  width: 13px; height: 13px;
+  fill: none; stroke: var(--red);
+  stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+  flex-shrink: 0;
+}
+
+.autopilotRunList {
+  display: grid;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.autopilotRunCard {
+  border: 1px solid var(--border-mid);
+  border-radius: var(--r-lg);
+  background: var(--bg-panel);
+  overflow: hidden;
+  transition: border-color var(--ease);
+}
+
+.autopilotRunCard.running {
+  border-color: var(--red-border);
+  box-shadow: 0 0 12px var(--red-glow-sm);
+}
+
+.autopilotRunCard.completed { border-color: rgba(0, 204, 85, 0.2); }
+.autopilotRunCard.failed    { border-color: rgba(204, 17, 17, 0.3); }
+
+.autopilotRunHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 13px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-card);
+}
+
+.autopilotRunTask {
+  padding: 8px 13px;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  line-height: 1.5;
+  border-bottom: 1px solid var(--border);
+}
+
+.autopilotRunTools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 8px 13px;
+  border-bottom: 1px solid var(--border);
+}
+
+.toolPill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 99px;
+  border: 1px solid var(--red-border);
+  background: var(--red-ghost);
+  color: var(--text-red);
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.autopilotRunOutput {
+  max-height: 240px;
+  overflow: auto;
+}
+
+.autopilotRunOutput::-webkit-scrollbar { width: 3px; }
+.autopilotRunOutput::-webkit-scrollbar-thumb { background: var(--red-dim); border-radius: 99px; }
+
+.autopilotRunOutput pre {
+  margin: 0;
+  padding: 10px 13px;
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  line-height: 1.55;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: transparent;
+}
+
+.modifyPanel {
+  margin-top: 8px;
+  padding: 14px;
+  border: 1px solid var(--amber-dim, rgba(255,170,0,0.2));
+  border-left: 3px solid var(--amber);
+  border-radius: var(--r-md);
+  background: rgba(255, 170, 0, 0.04);
+  flex-shrink: 0;
+}
+
+.modifyPanel textarea { min-height: 80px; font-size: 0.76rem; }
+
+/* Number inputs */
+input[type="number"] {
+  border: 1px solid var(--border-mid);
+  border-radius: var(--r-md);
+  padding: 8px 12px;
+  background: var(--bg-input);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  width: 100%;
+  transition: border-color var(--ease), box-shadow var(--ease);
+}
+
+input[type="number"]:focus {
+  outline: none;
+  border-color: var(--red);
+  box-shadow: 0 0 8px var(--red-glow-sm);
+}
+
+/* CONNECTOR PILLS */
 
 .connectorGrid { display: grid; gap: 5px; }
 
@@ -1439,7 +1808,7 @@ input[type="text"]:focus, input[type="email"]:focus {
 .connPill.needs_env{ background: var(--amber-dim);  color: var(--amber); }
 .connPill.mock     { background: rgba(100,100,160,0.15); color: #8888cc; }
 
-/* ═══ RESPONSIVE ════════════════════════════════════════════════════════════ */
+/* RESPONSIVE */
 
 @media (max-width: 1200px) {
   .appShell { grid-template-columns: 220px minmax(0, 1fr) 240px; }
@@ -1454,10 +1823,10 @@ input[type="text"]:focus, input[type="email"]:focus {
   .tmuxSessionList { display: none; }
 }
 
-/* ═══ TOOL NAV — 6 buttons (3 × 2 grid) ════════════════════════════════════ */
+/* Tool nav — 8 buttons (4 × 2 grid) */
 
 .toolNav {
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
 }
 
 /* Scrollable tab bar for 6 tabs */
@@ -1467,7 +1836,7 @@ input[type="text"]:focus, input[type="email"]:focus {
 }
 .toolTabBar::-webkit-scrollbar { display: none; }
 
-/* ═══ AGENTS PANEL ══════════════════════════════════════════════════════════ */
+/* AGENTS PANEL */
 
 .agentsPanel {
   display: grid;
@@ -1627,7 +1996,7 @@ input[type="text"]:focus, input[type="email"]:focus {
 
 .agentSelect:focus { border-color: var(--red); box-shadow: 0 0 8px var(--red-glow-sm); }
 
-/* ═══ CODE PANEL ════════════════════════════════════════════════════════════ */
+/* CODE PANEL */
 
 .codePanel {
   display: grid;
@@ -1753,7 +2122,7 @@ input[type="text"]:focus, input[type="email"]:focus {
   min-width: 0;
 }
 
-/* ═══ DIFF VIEW ════════════════════════════════════════════════════════════ */
+/* DIFF VIEW */
 
 .diffView {
   font-family: var(--font-mono);
