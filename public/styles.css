@@ -1568,6 +1568,18 @@ input[type="text"]:focus, input[type="email"]:focus {
   font-size: 0.76rem;
 }
 
+.autopilotDirRow {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 7px;
+  font-size: 0.62rem;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .autopilotSessionListHeader {
   display: flex;
   align-items: center;

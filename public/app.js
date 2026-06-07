@@ -1703,6 +1703,10 @@ function renderSshPanel() {
 // Autopilot panel
 function renderAutopilotPanel() {
   const selectedSession = state.autopilotSessions.find((s) => s.id === state.autopilotSelectedId);
+  // Derive running state from actual sessions so it can never get stuck
+  const isRunning = state.autopilotSessions.some((s) => s.status === "running" || s.status === "planning");
+  const canLaunch = state.autopilotGoal.trim().length > 0 && !isRunning;
+
   return `
     <div class="autopilotPanel">
       <div class="autopilotSidebar">
@@ -1713,16 +1717,14 @@ function renderAutopilotPanel() {
           </label>
           <textarea id="autopilot-goal" rows="4"
             placeholder="e.g. Add dark mode to Hyperion. Read styles.css, propose changes, write them.">${esc(state.autopilotGoal)}</textarea>
-          <div style="display:flex;gap:6px;margin-top:8px;align-items:center;">
-            <div class="fieldLabel" style="font-size:0.6rem;color:var(--text-muted);">
-              ${icon("folder")} ${esc(state.workspace.rootDir)}
-            </div>
-            <button class="btn btn-primary" data-action="launch-autopilot" style="margin-left:auto;"
-              ${state.autopilotRunning || !state.autopilotGoal.trim() ? "disabled" : ""}>
-              ${icon(state.autopilotRunning ? "loader" : "zap")}
-              ${state.autopilotRunning ? "Planning…" : "Launch"}
-            </button>
+          <div class="autopilotDirRow">
+            ${icon("folder")} <span>${esc(state.workspace.rootDir)}</span>
           </div>
+          <button class="btn btn-primary" data-action="launch-autopilot" style="width:100%;margin-top:6px;"
+            ${canLaunch ? "" : "disabled"}>
+            ${icon(isRunning ? "loader" : "zap")}
+            ${isRunning ? "Planning…" : "Launch"}
+          </button>
         </div>
 
         <div class="autopilotSessionListHeader">
