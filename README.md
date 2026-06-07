@@ -1,10 +1,10 @@
-# Hyperion
+# Hyperion Z
 
 > A self-hosted agentic AI operations console. Point it at any codebase, give it a goal, and watch a fleet of AI agents plan the work, split it across parallel and serial tasks, read and write real files, run shell commands, and hand you a git diff when they are done.
 
 ## What it is
 
-Hyperion is a **local-first AI ops console** built for engineers who want more than a chat window. It runs a Deno/TypeScript server behind a dark red Matrix-themed browser UI. You can orchestrate multi-agent pipelines with a single natural-language prompt, manage tmux sessions, draft emails with AI, browse and edit code with a Monaco editor, manage SSH connections, and configure custom agents — all from one streaming dashboard.
+Hyperion Z is a **local-first AI ops console** built for engineers who want more than a chat window. It runs a Deno/TypeScript server behind a dark red Matrix-themed browser UI. You can orchestrate multi-agent pipelines with a single natural-language prompt, manage tmux sessions, draft emails with AI, browse and edit code with a Monaco editor, manage SSH connections, and configure custom agents — all from one streaming dashboard.
 
 The entire system runs on your machine. The only external dependency is the model API (Anthropic Claude, OpenAI, or both).
 
@@ -30,7 +30,7 @@ Drag-and-drop or paste files. Content is automatically prepended to the next age
 Create and manage custom agent configurations. Set the name, provider, model, system prompt, accent colour, and tool access. Agents persist across restarts in `data/agents.json`.
 
 ### CODE
-Monaco editor (the VS Code engine) embedded in the browser. Browse the workspace directory tree, open files, and view git diffs. When Autopilot completes a run, you can click "Hyperion Diff" on any session to see the full `git diff HEAD` for every file the agents touched.
+Monaco editor (the VS Code engine) embedded in the browser. Browse the workspace directory tree, open files, and view git diffs. When Autopilot completes a run, you can click "Hyperion Z Diff" on any session to see the full `git diff HEAD` for every file the agents touched.
 
 ### SSH
 Saved SSH connection manager. Add connections (label, host, user, port, key path) and open any of them directly in a new tmux window with one click. Connections persist in `data/ssh-connections.json`.
@@ -47,7 +47,7 @@ Each agent then runs its own autonomous tool-use loop:
 | `fs_list` | List a directory |
 | `tmux_run` | Execute a shell command via tmux and capture output |
 
-Everything is visible in real time: the plan appears as it is generated, each agent's token-by-token output streams live, and every tool call is shown. You can pause any agent mid-run, edit its task, and resume. When a session completes, written files appear as green chips on each agent card. The Hyperion Diff button runs `git diff HEAD` across all session-written files and renders the result in the Code panel.
+Everything is visible in real time: the plan appears as it is generated, each agent's token-by-token output streams live, and every tool call is shown. You can pause any agent mid-run, edit its task, and resume. When a session completes, written files appear as green chips on each agent card. The Hyperion Z Diff button runs `git diff HEAD` across all session-written files and renders the result in the Code panel.
 
 Autopilot has been used to improve its own codebase from a single prompt, which makes it a practical test for any engineering workflow you point it at.
 
@@ -100,8 +100,8 @@ OpenAI / Anthropic APIs
 ### Run
 
 ```bash
-git clone https://github.com/srgangaram-swe/Hyperion.git
-cd Hyperion
+git clone https://github.com/srgangaram-swe/Hyperion Z.git
+cd Hyperion Z
 cp .env.example .env
 # Edit .env and add your ANTHROPIC_API_KEY and/or OPENAI_API_KEY
 deno task dev
@@ -192,7 +192,7 @@ SLACK_BOT_TOKEN=
 - **Pause / Resume** any running agent
 - **Modify task** while paused: edit the agent's task prompt and resume with the new instruction
 - **Abort** the entire session at any time
-- **Hyperion Diff**: after completion, view the full `git diff HEAD` for everything the session wrote
+- **Hyperion Z Diff**: after completion, view the full `git diff HEAD` for everything the session wrote
 
 ### Configuring the planner
 
@@ -208,7 +208,7 @@ Backed by `data/memory.json`. Four categories:
 |----------|---------|
 | `fact` | "User is a data scientist at LANL" |
 | `preference` | "Always format code with 2-space indentation" |
-| `context` | "Current project: Hyperion orchestrator improvements" |
+| `context` | "Current project: Hyperion Z orchestrator improvements" |
 | `skill` | "Agent knows how to search arXiv for papers" |
 
 **API:**

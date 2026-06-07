@@ -150,7 +150,7 @@ async function handleRequest(request: Request): Promise<Response> {
 async function handleApi(request: Request, url: URL): Promise<Response> {
   // Health
   if (url.pathname === "/api/health" && request.method === "GET") {
-    return json({ ok: true, providers: getProviderHealth(), name: "Hyperion" });
+    return json({ ok: true, providers: getProviderHealth(), name: "Hyperion Z" });
   }
 
   // Agents

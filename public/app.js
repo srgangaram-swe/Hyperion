@@ -37,9 +37,9 @@
 
 // State
 const STARTER_PROMPTS = [
-  "Analyse the Hyperion codebase and propose 3 specific improvements to the orchestrator's tool-use loop.",
+  "Analyse the Hyperion Z codebase and propose 3 specific improvements to the orchestrator's tool-use loop.",
   "Build a unit test suite for server/orchestrator.ts using Deno's built-in test runner.",
-  "Add a dark-mode toggle to Hyperion's UI — read styles.css, propose changes, and write them.",
+  "Add a dark-mode toggle to Hyperion Z's UI — read styles.css, propose changes, and write them.",
 ];
 
 const state = {
@@ -1737,7 +1737,7 @@ function renderAutopilotPanel() {
             <span style="font-weight:400;color:var(--text-muted);font-size:0.58rem;margin-left:6px;">⌘↵ to launch</span>
           </label>
           <textarea id="autopilot-goal" rows="4"
-            placeholder="e.g. Add dark mode to Hyperion. Read styles.css, propose changes, write them.">${esc(state.autopilotGoal)}</textarea>
+            placeholder="e.g. Add dark mode to Hyperion Z. Read styles.css, propose changes, write them.">${esc(state.autopilotGoal)}</textarea>
           <div class="autopilotDirRow">
             ${icon("folder")} <span>${esc(state.workspace.rootDir)}</span>
           </div>
@@ -1797,7 +1797,7 @@ function renderAutopilotSession(sess) {
           ${!isRunning && sess.runs?.some((r) => r.filesWritten?.length) ? `
             <button class="btn btn-ghost" style="font-size:0.62rem;padding:3px 9px;"
               data-action="view-session-diff" data-id="${sess.id}">
-              ${icon("diff")} Hyperion Diff
+              ${icon("diff")} Hyperion Z Diff
             </button>
           ` : ""}
           ${isRunning

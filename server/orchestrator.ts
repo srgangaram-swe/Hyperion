@@ -1,7 +1,7 @@
 import type { AgentConfig, OrchestratorSession, PlannedAgent, OrchestratorRun } from "../shared/types.ts";
 import { resolveFsPath, runInTmux } from "./utils.ts";
 
-const PLANNER_SYSTEM = `You are Hyperion's meta-planner. Given a goal from the user, decompose it into 2-4 focused sub-agent tasks.
+const PLANNER_SYSTEM = `You are Hyperion Z's meta-planner. Given a goal from the user, decompose it into 2-4 focused sub-agent tasks.
 
 Return ONLY valid JSON (no markdown fencing, no prose before/after) in this exact shape:
 {

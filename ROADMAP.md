@@ -1,4 +1,4 @@
-# Hyperion Roadmap
+# Hyperion Z Roadmap
 
 This is a living document. Items are roughly ordered by priority within each phase.
 
@@ -23,8 +23,8 @@ This is a living document. Items are roughly ordered by priority within each pha
 - [x] Parallel and serial agent execution based on dependency graph
 - [x] Human-in-the-loop steering (pause, modify task, resume)
 - [x] Per-run written file tracking with green chip UI
-- [x] Hyperion Diff (git diff for all session-written files, rendered in Code panel)
-- [x] Self-improvement capability (Hyperion Autopilot successfully improving its own codebase)
+- [x] Hyperion Z Diff (git diff for all session-written files, rendered in Code panel)
+- [x] Self-improvement capability (Hyperion Z Autopilot successfully improving its own codebase)
 
 ---
 
@@ -44,7 +44,7 @@ This is a living document. Items are roughly ordered by priority within each pha
 - [ ] **Session persistence** — save sessions, runs, and output to SQLite so they survive server restarts; session list persists across reboots
 - [ ] **Model comparison mode** — send one prompt to Claude and GPT-4o simultaneously and compare responses side-by-side in the Code panel
 - [ ] **Multi-user auth** — bcrypt password hashing, session tokens with 7-day TTL, per-user memory isolation; single-user mode remains default
-- [ ] **MCP server** — expose Hyperion tools (memory, tmux, file access, email) as a Model Context Protocol server so external agents and tools can call them
+- [ ] **MCP server** — expose Hyperion Z tools (memory, tmux, file access, email) as a Model Context Protocol server so external agents and tools can call them
 - [ ] **Webhook triggers** — accept inbound webhooks (email arrival, CI event, cron) to start Autopilot sessions automatically
 - [ ] **CalDAV calendar integration** — read and write calendar events via CalDAV (compatible with Radicale, Nextcloud, Apple Calendar, Fastmail)
 
@@ -78,5 +78,5 @@ This is a living document. Items are roughly ordered by priority within each pha
 | Jun 2026 | Phase 1 complete: Red Matrix UI, tmux, email, memory, WebSocket |
 | Jun 2026 | SSH manager, custom agents panel, Code panel with Monaco |
 | Jun 2026 | Autopilot meta-agent orchestrator with parallel/serial execution |
-| Jun 2026 | Human-in-the-loop steering, written-file tracking, Hyperion Diff |
-| Jun 2026 | Self-improvement demo: Hyperion improved its own orchestrator from a single prompt |
+| Jun 2026 | Human-in-the-loop steering, written-file tracking, Hyperion Z Diff |
+| Jun 2026 | Self-improvement demo: Hyperion Z improved its own orchestrator from a single prompt |
