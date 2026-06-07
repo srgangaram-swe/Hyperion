@@ -85,7 +85,7 @@ Deno server (server/main.ts)
 OpenAI / Anthropic APIs
 ```
 
-**Stack:** Deno, TypeScript, vanilla JS (no bundler, no framework), WebSocket, SSE, Monaco Editor (AMD CDN)
+**Stack:** Deno, TypeScript, vanilla JS (no bundler, no framework), Python, WebSocket, SSE, Monaco Editor (AMD CDN)
 
 ---
 
