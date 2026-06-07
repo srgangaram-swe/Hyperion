@@ -420,6 +420,14 @@ function handleAction(action, value, el, e) {
     case "clear-autopilot-done":
       clearDoneAutopilotSessions();
       break;
+    case "view-session-diff":
+      viewAutopilotSessionDiff(value);
+      break;
+    case "open-written-file":
+      state.activeTool = "code";
+      openFsFile(value);
+      render();
+      break;
     case "toggle-run-collapse":
       state.autopilotRunCollapsed[value] = !state.autopilotRunCollapsed[value];
       render();
@@ -835,6 +843,15 @@ async function deleteAutopilotSession(id) {
   render();
 }
 
+async function viewAutopilotSessionDiff(sessionId) {
+  const res = await fetch(`/api/orchestrate/${sessionId}/diff`);
+  const data = await res.json();
+  state.codeDiff = data.diff || "(no diff)";
+  state.activeTool = "code";
+  render();
+  requestAnimationFrame(mountMonaco);
+}
+
 function clearDoneAutopilotSessions() {
   const done = state.autopilotSessions.filter((s) => s.status !== "running" && s.status !== "planning");
   done.forEach((s) => fetch(`/api/orchestrate/${s.id}`, { method: "DELETE" }).catch(() => {}));
@@ -972,7 +989,11 @@ function connectAutopilotSocket() {
       }
       if (event.type === "agent_done") {
         const run = sess.runs?.find((r) => r.id === event.runId);
-        if (run) { run.status = "completed"; run.completedAt = new Date().toISOString(); }
+        if (run) {
+          run.status = "completed";
+          run.completedAt = new Date().toISOString();
+          if (event.filesWritten?.length) run.filesWritten = event.filesWritten;
+        }
       }
       if (event.type === "agent_error") {
         const run = sess.runs?.find((r) => r.id === event.runId);
@@ -1772,10 +1793,18 @@ function renderAutopilotSession(sess) {
           <div class="fieldLabel" style="font-size:0.68rem;">${esc(sess.goal.slice(0, 80))}</div>
           <small style="color:var(--text-muted);">${esc(sess.workDir)} · ${esc(sess.status)}</small>
         </div>
-        ${isRunning
-          ? `<button class="btn btn-danger" data-action="abort-autopilot" data-id="${sess.id}">${icon("square")} Abort</button>`
-          : ""
-        }
+        <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
+          ${!isRunning && sess.runs?.some((r) => r.filesWritten?.length) ? `
+            <button class="btn btn-ghost" style="font-size:0.62rem;padding:3px 9px;"
+              data-action="view-session-diff" data-id="${sess.id}">
+              ${icon("diff")} Hyperion Diff
+            </button>
+          ` : ""}
+          ${isRunning
+            ? `<button class="btn btn-danger" data-action="abort-autopilot" data-id="${sess.id}">${icon("square")} Abort</button>`
+            : ""
+          }
+        </div>
       </div>
 
       ${sess.plan ? `
@@ -1849,6 +1878,17 @@ function renderAutopilotRun(run, sess) {
         ${run.tools?.length > 0 ? `
           <div class="autopilotRunTools">
             ${run.tools.map((t) => `<span class="toolPill">${t}</span>`).join("")}
+          </div>
+        ` : ""}
+
+        ${run.filesWritten?.length ? `
+          <div class="autopilotWrittenFiles">
+            ${icon("file")} <span style="font-size:0.6rem;color:var(--text-dim);font-weight:700;text-transform:uppercase;letter-spacing:0.08em;">Written</span>
+            ${run.filesWritten.map((f) => `
+              <button class="writtenFileChip" data-action="open-written-file" data-id="${esc(f)}" title="${esc(f)}">
+                ${esc(f.split("/").pop())}
+              </button>
+            `).join("")}
           </div>
         ` : ""}
 

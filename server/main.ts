@@ -655,7 +655,10 @@ async function handleApi(request: Request, url: URL): Promise<Response> {
           if (event.type === "agent_start") {
             addEvent({ sessionId: session.id, type: "orchestrator", level: "info", message: `[${event.index + 1}/${event.total}] ${event.role} started` });
           } else if (event.type === "agent_done") {
-            addEvent({ sessionId: session.id, type: "orchestrator", level: "success", message: `${session.runs[session.runs.length - 1]?.role ?? "Agent"} done` });
+            const run = session.runs.find((r) => r.id === event.runId);
+            if (run && event.filesWritten?.length) run.filesWritten = event.filesWritten;
+            const fileMsg = event.filesWritten?.length ? ` · wrote ${event.filesWritten.length} file(s)` : "";
+            addEvent({ sessionId: session.id, type: "orchestrator", level: "success", message: `${run?.role ?? "Agent"} done${fileMsg}` });
           } else if (event.type === "agent_error") {
             addEvent({ sessionId: session.id, type: "orchestrator", level: "error", message: `Agent error: ${event.error.slice(0, 80)}` });
           } else if (event.type === "tool_call") {
@@ -708,6 +711,28 @@ async function handleApi(request: Request, url: URL): Promise<Response> {
     const body = await request.json().catch(() => ({}));
     const ok = resumeOrchestratorRun(orchestrateResumeMatch[1], orchestrateResumeMatch[2], body.modifiedTask);
     return json({ ok });
+  }
+
+  const orchestrateDiffMatch = url.pathname.match(/^\/api\/orchestrate\/([^/]+)\/diff$/);
+  if (orchestrateDiffMatch && request.method === "GET") {
+    const sess = orchestratorSessions.get(orchestrateDiffMatch[1]);
+    if (!sess) return json({ error: "Not found" }, 404);
+    const allFiles = sess.runs.flatMap((r) => r.filesWritten ?? []);
+    const unique = [...new Set(allFiles)];
+    if (unique.length === 0) return json({ diff: "(no files were written in this session)" });
+    try {
+      const proc = new Deno.Command("git", {
+        args: ["diff", "HEAD", "--", ...unique],
+        cwd: sess.workDir,
+        stdout: "piped",
+        stderr: "piped",
+      });
+      const { stdout, stderr } = await proc.output();
+      const diff = new TextDecoder().decode(stdout).trim() || new TextDecoder().decode(stderr).trim();
+      return json({ diff: diff || "(no uncommitted changes to these files)", files: unique });
+    } catch (e) {
+      return json({ error: String(e) }, 500);
+    }
   }
 
   return json({ error: "Not found" }, 404);

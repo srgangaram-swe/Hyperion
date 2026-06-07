@@ -182,6 +182,7 @@ export interface OrchestratorRun {
   status: RunStatus;
   output: string;
   error?: string;
+  filesWritten?: string[];
   startedAt?: string;
   completedAt?: string;
 }

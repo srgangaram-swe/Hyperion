@@ -27,6 +27,8 @@ Rules:
 - provider must be "anthropic" or "openai" or "mock"
 - For code tasks use "fs_read", "fs_write", "fs_list"
 - For running tests/builds use "tmux_run"
+- IMPORTANT: All file paths must be RELATIVE (e.g. "analysis.md", "tmp/notes.md"). Never use absolute paths like "/tmp/...".
+- When an early agent needs to pass data to a later agent, write it to a relative path like "tmp/handoff.md" and reference that path in the later agent's task.
 - Do NOT include any text before or after the JSON`;
 
 const TOOL_SYSTEM_SUFFIX = (workDir: string, tmuxSession: string | null, priorContext: string) => `
@@ -49,7 +51,7 @@ export type OrchestratorEvent =
   | { type: "plan"; plan: { reasoning: string; agents: PlannedAgent[] } }
   | { type: "agent_start"; runId: string; role: string; index: number; total: number }
   | { type: "agent_delta"; runId: string; delta: string }
-  | { type: "agent_done"; runId: string; output: string }
+  | { type: "agent_done"; runId: string; output: string; filesWritten: string[] }
   | { type: "agent_error"; runId: string; error: string }
   | { type: "tool_call"; runId: string; tool: string; args: Record<string, unknown> }
   | { type: "tool_result"; runId: string; tool: string; result: string }
@@ -156,6 +158,7 @@ export async function* orchestrate(
 
     try {
       let fullOutput = "";
+      const filesWritten: string[] = [];
       for await (const event of runAgentWithTools(
         run,
         systemSuffix,
@@ -171,14 +174,19 @@ export async function* orchestrate(
           yield { type: "agent_delta", runId: run.id, delta: event.data };
         } else if (event.type === "tool_call") {
           yield { type: "tool_call", runId: run.id, tool: event.tool, args: event.args };
+          if (event.tool === "fs_write" && typeof event.args.path === "string") {
+            const p = event.args.path as string;
+            if (!filesWritten.includes(p)) filesWritten.push(p);
+          }
         } else if (event.type === "tool_result") {
           yield { type: "tool_result", runId: run.id, tool: event.tool, result: event.result };
         }
       }
       outputs[i] = fullOutput;
       run.status = "completed";
+      run.filesWritten = filesWritten;
       run.completedAt = new Date().toISOString();
-      yield { type: "agent_done", runId: run.id, output: fullOutput };
+      yield { type: "agent_done", runId: run.id, output: fullOutput, filesWritten };
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       run.status = "failed";
@@ -368,7 +376,7 @@ async function* anthropicToolLoop(
 
     const body: Record<string, unknown> = {
       model: run.model,
-      max_tokens: 4096,
+      max_tokens: 8192,
       system: systemPrompt,
       messages,
     };
@@ -388,6 +396,10 @@ async function* anthropicToolLoop(
     if (!res.ok) throw new Error(`Anthropic ${res.status}: ${await res.text()}`);
     const data = await res.json();
 
+    if (data.stop_reason === "max_tokens") {
+      yield { type: "delta", data: "\n\n[Warning: response hit token limit — some content may be truncated]\n" };
+    }
+
     const textBlocks: string[] = [];
     const toolUseBlocks: Array<{ id: string; name: string; input: Record<string, unknown> }> = [];
 
@@ -396,7 +408,7 @@ async function* anthropicToolLoop(
         textBlocks.push(block.text);
         yield { type: "delta", data: block.text };
       } else if (block.type === "tool_use") {
-        toolUseBlocks.push({ id: block.id, name: block.name, input: block.input });
+        toolUseBlocks.push({ id: block.id, name: block.name, input: block.input ?? {} });
       }
     }
 
@@ -585,10 +597,12 @@ async function executeTool(
     if (name === "fs_write") {
       const path = String(args.path ?? "");
       const content = String(args.content ?? "");
+      if (!path) return "[Error: fs_write requires a 'path' argument]";
+      if (content.length === 0) return "[Error: fs_write received empty content — make sure you pass the full file text in the 'content' argument]";
       const safe = resolveFsPath(path, workDir);
       if (!safe) return "[Error: path outside working directory]";
       const dir = safe.split("/").slice(0, -1).join("/");
-      await Deno.mkdir(dir, { recursive: true });
+      if (dir) await Deno.mkdir(dir, { recursive: true });
       await Deno.writeTextFile(safe, content);
       return `Written ${content.length} bytes to ${path}`;
     }

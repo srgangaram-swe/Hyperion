@@ -1735,6 +1735,47 @@ input[type="text"]:focus, input[type="email"]:focus {
   letter-spacing: 0.06em;
 }
 
+.autopilotWrittenFiles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 13px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(0, 204, 85, 0.04);
+}
+
+.autopilotWrittenFiles svg {
+  width: 11px; height: 11px;
+  fill: none; stroke: var(--green);
+  stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+  flex-shrink: 0;
+}
+
+.writtenFileChip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 99px;
+  border: 1px solid rgba(0, 204, 85, 0.3);
+  background: rgba(0, 204, 85, 0.08);
+  color: var(--green);
+  font-size: 0.62rem;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--ease);
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.writtenFileChip:hover {
+  background: rgba(0, 204, 85, 0.15);
+  border-color: rgba(0, 204, 85, 0.5);
+}
+
 .autopilotRunOutput {
   max-height: 240px;
   overflow: auto;
