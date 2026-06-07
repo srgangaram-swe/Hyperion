@@ -1,12 +1,12 @@
 /* HYPERION — Red Matrix dark theme */
 
 :root {
-  /* Core palette */
-  --bg:           #050505;
-  --bg-panel:     #0c0c0c;
-  --bg-card:      #101010;
-  --bg-input:     #090909;
-  --bg-hover:     #161616;
+  /* Core palette — semi-transparent so matrix rain bleeds through */
+  --bg:           rgba(5, 5, 5, 0.86);
+  --bg-panel:     rgba(12, 12, 12, 0.88);
+  --bg-card:      rgba(16, 16, 16, 0.90);
+  --bg-input:     rgba(9, 9, 9, 0.92);
+  --bg-hover:     rgba(22, 22, 22, 0.90);
 
   /* Red spectrum */
   --red:          #cc1111;
@@ -57,7 +57,7 @@ html, body {
   padding: 0;
   height: 100%;
   overflow: hidden;
-  background: var(--bg);
+  background: #050505;
   color: var(--text);
   font-family: var(--font-mono);
   font-size: 13px;
